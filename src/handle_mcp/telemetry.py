@@ -42,10 +42,12 @@ FILLED = {"rema1000": "list_filled"}  # REMA's cart is a shopping list: never mi
 OFF = {"0", "false", "no", "off"}
 
 NOTICE = """\
-handle-mcp tæller anonymt: start, første værktøj og login pr. dag, og fyldte kurve (butik,
-beløb afrundet til 50 kr., antal varer). Med version, styresystem og dato.
-Ingen navne, adresser, logins, varer, ordre-id eller id for dig eller din computer.
-Slå det fra med HANDLE_TELEMETRY=0 eller: handle-mcp --no-telemetry
+handle-mcp anonymously collects usage statistics: application starts, first tool 
+usage and daily logins, and filled shopping carts (store, amount rounded to 50 DKK, 
+number of items). It includes the application version, operating system and date. 
+No names, addresses, login credentials, products, order IDs or user/device 
+identifiers are collected.
+Disable this using: HANDLE_TELEMETRY=0 eller: handle-mcp --no-telemetry
 Læs mere: https://github.com/NJohansen/handle-mcp#brugsstatistik
 """
 
