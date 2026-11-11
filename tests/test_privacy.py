@@ -189,7 +189,7 @@ def test_scrub_text_false_positives_are_accepted(text):
     assert REDACTED in scrub_text(text)
 
 
-def test_recipe_text_passes_scrub_unchanged():
+async def test_recipe_text_passes_scrub_unchanged():
     """get_recipe's photo link, intro, method and tip are the store's recipe text, not personal
     data: _out() keeps them as the store wrote them."""
     from handle_mcp.models import RecipeDetails, RecipeSection
@@ -206,6 +206,6 @@ def test_recipe_text_passes_scrub_unchanged():
         method=[RecipeSection(title="Kebabfad", steps=["Tænd ovnen på 200 grader varmluft"])],
         tip="Server med citron",
     )
-    out = server._out(recipe)
+    out = await server._out(recipe)
     assert out == jsonable(recipe)
     assert out["method"] == [{"title": "Kebabfad", "steps": ["Tænd ovnen på 200 grader varmluft"]}]

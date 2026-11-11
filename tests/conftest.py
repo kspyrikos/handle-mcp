@@ -192,6 +192,8 @@ class BrokenStore(FakeStore):
 def no_telemetry(monkeypatch, tmp_path):
     """Tests never send an event. tests/test_telemetry.py turns it on with a fake sender."""
     monkeypatch.setenv("HANDLE_TELEMETRY", "0")
+    # Keep existing store-data assertions deterministic; translation has dedicated tests.
+    monkeypatch.setenv("HANDLE_LANGUAGE", "da")
     monkeypatch.setattr(telemetry, "_off", False)
     monkeypatch.setattr(telemetry, "_sent_today", {})
     monkeypatch.setattr(telemetry, "_noticed", False)

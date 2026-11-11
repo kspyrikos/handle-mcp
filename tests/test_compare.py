@@ -712,10 +712,10 @@ def test_candidates_keep_the_note():
     assert line.candidates[1:][0]["note"]
 
 
-def test_candidates_survive_out():
+async def test_candidates_survive_out():
     banana = p("x", "b", "Bananer", "3.00", "1 stk")
     cheap = p("x", "c", "Bananer øko", "2.50", "1 stk")
-    out = server._out(best_match("bananer", [banana, cheap]))
+    out = await server._out(best_match("bananer", [banana, cheap]))
     assert out["candidates"][1]["line_total"] in {"3.00", "2.50"}
 
 
@@ -1026,9 +1026,9 @@ def test_size_fits_is_unknown_when_sizes_cannot_be_compared():
     assert "size_fits" not in brief("kyllingebryst 500 g", best_match("kyllingebryst", [two]))
 
 
-def test_six_pieces_fit_in_the_tool_answer():
+async def test_six_pieces_fit_in_the_tool_answer():
     banana = p("x", "b", "Bananer", "3.00", "1 stk")
-    out = server._out(best_match("6 x bananer", [banana]))
+    out = await server._out(best_match("6 x bananer", [banana]))
     assert out["candidates"][0]["line_total"] == "18.00" and out["candidates"][0]["size_fits"]
 
 

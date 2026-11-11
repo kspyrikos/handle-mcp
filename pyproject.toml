@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.27",
     "keyring>=25",
     "tzdata>=2024.1",  # Windows has no system time zone database (#91)
+    "argostranslate>=1.9.6,<2",  # local, offline Danish-to-English translation
 ]
 
 [project.urls]

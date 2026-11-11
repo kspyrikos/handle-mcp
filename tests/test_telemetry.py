@@ -26,7 +26,7 @@ def sent(monkeypatch):
         def start(self):
             self.run()
 
-    monkeypatch.setattr(telemetry.threading, "Thread", Now)
+    monkeypatch.setattr(telemetry, "Thread", Now)
     return events
 
 
@@ -302,9 +302,10 @@ async def test_the_model_is_told_to_pass_the_notice_on():
 
 def test_instructions_suggest_a_first_prompt():
     text = server.mcp.instructions
-    assert "Lav ugens madplan" in text
+    assert "Plan this week's meals" in text
     assert "at most 3 short questions" in text
-    assert "this week included, at least 1" in text
+    assert "including this week" in text
+    assert "minimum of 1 week" in text
 
 
 async def test_a_failing_endpoint_never_breaks_a_tool(sent, monkeypatch):

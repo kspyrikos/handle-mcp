@@ -18,6 +18,7 @@ import os
 import platform
 import sys
 import threading
+from threading import Thread
 from collections.abc import Callable
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -284,7 +285,7 @@ def _send(event: str, data: dict[str, Any], wait: bool = False) -> None:
             "data": data,
         },
     }
-    thread = threading.Thread(target=_post, args=(payload,), daemon=True)
+    thread = Thread(target=_post, args=(payload,), daemon=True)
     thread.start()
     if wait:  # at exit: give the last event its timeout before Python stops the thread
         thread.join(TIMEOUT)

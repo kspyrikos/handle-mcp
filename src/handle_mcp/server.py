@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
 import re
 from collections.abc import Awaitable, Callable
@@ -18,7 +19,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 
-from handle_mcp import cli, compare, links, recipe_cart, telemetry
+from handle_mcp import cli, compare, links, recipe_cart, telemetry, translation
 from handle_mcp import stores as registry
 from handle_mcp.privacy import jsonable, scrub, scrub_text
 
@@ -53,16 +54,19 @@ ADD = ToolAnnotations(  # add_recipe_to_cart: twice adds twice
 mcp = MCPServer(
     "handle",
     instructions=(
-        "Tools for Danish grocery stores with home delivery. You can search, compare "
-        "baskets, find recipes, list delivery times and change cart quantities. You can never order or pay: the human "
-        "always does that on the store's website. An answer with `telemetry_notice` says "
-        "what handle-mcp counts anonymously: tell the human in one sentence, once. "
-        "If the human is new or unsure what to ask, suggest, in their language: 'Vi har "
-        "4.000 kr. til mad om måneden. Lav ugens madplan.' Before a meal plan, if you do not "
-        "know it yet, ask at most 3 short questions: how many eat (adults, children), what "
-        "they love and never eat, and which store (or the cheapest). A monthly budget becomes "
-        "a weekly one: what is left of it divided by the weeks left in the month, this week "
-        "included, at least 1. Show that sum."
+        "Tools for Danish grocery stores with home delivery. Search products, compare baskets, "
+        "find recipes, list delivery times and change cart quantities. You can never order or pay: "
+        "the human always does that on the store's website. Store display text is translated from "
+        "Danish to English locally by Argos Translate by default. Product IDs, EANs, URLs, prices, "
+        "quantities, units and separate brand fields are preserved. An answer with "
+        "`telemetry_notice` says what handle-mcp counts anonymously: tell the human in one "
+        "sentence, once. If the human "
+        "is new or unsure what to ask, suggest in their language: 'We have 4,000 kr. a month for "
+        "food. Plan this week's meals.' Before a meal plan, if you do not know it yet, ask at most "
+        "3 short questions: how many eat (adults and children), what they love and never eat, and "
+        "which store (or the cheapest). Convert a monthly budget into a weekly one by dividing the remaining "
+        "budget by the weeks left in the month, including this week, with a "
+        "minimum of 1 week. Show that amount."
     ),
 )
 
@@ -92,15 +96,29 @@ def _persons(persons: int | None) -> int | None:
 
 
 def _tool(annotations: ToolAnnotations) -> Callable[[Callable], Callable]:
-    """`mcp.tool`, and count the day's first tool call (telemetry.counted)."""
-    return lambda fn: mcp.tool(annotations=annotations)(telemetry.counted(fn))
+    """Register a tool, translate validation errors, and count the day's first tool call."""
+    def decorate(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        async def with_english_errors(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await fn(*args, **kwargs)
+            except ToolError as exc:
+                message = await asyncio.to_thread(translation.translate_text, str(exc))
+                raise ToolError(message) from exc
+
+        return mcp.tool(annotations=annotations)(telemetry.counted(with_english_errors))
+
+    return decorate
 
 
-def _out(value: Any) -> dict[str, Any]:
-    result = scrub(jsonable(value))
+async def _out(value: Any) -> dict[str, Any]:
+    # Scrub source text first so translated addresses cannot evade privacy rules.
+    clean = scrub(jsonable(value))
+    translated = await asyncio.to_thread(translation.translate_payload, clean)
+    result = scrub(translated)
     result = result if isinstance(result, dict) else {"result": result}
     if notice := telemetry.notice():  # once: the model tells the human what is counted
-        result["telemetry_notice"] = notice
+        result["telemetry_notice"] = await asyncio.to_thread(translation.translate_text, notice)
     return result
 
 
@@ -149,7 +167,7 @@ async def search_products(
     known. Stores rank by relevance and put cheap products far down: when the human asks for the
     cheapest, use sort="unit_price" (per kg/l/stk) or "price"."""
     limit = max(1, min(limit, MAX_RESULTS))
-    return _out(await _each(_names(stores), lambda s: compare.search(s, query, limit, sort)))
+    return await _out(await _each(_names(stores), lambda s: compare.search(s, query, limit, sort)))
 
 
 @_tool(READ)
@@ -158,7 +176,7 @@ async def search_recipes(query: str, stores: list[str] | None = None, limit: int
     Use get_recipe for time, persons and the products to buy.
     nemlig only: BilkaToGo has no recipe search, use list_recipes with `category` there."""
     limit = max(1, min(limit, MAX_RESULTS))
-    return _out(await _each(_names(stores), lambda s: s.recipes(query, limit)))
+    return await _out(await _each(_names(stores), lambda s: s.recipes(query, limit)))
 
 
 @_tool(READ)
@@ -171,7 +189,7 @@ async def get_recipe(store: str, recipe: str, persons: int | None = None) -> dic
     in the cart with add_recipe_to_cart after the human says yes.
     BilkaToGo: one pack per product, no alternatives; `persons` is fixed (null for pieces).
     `missing`: product ids not sold at the address: say so to the human."""
-    return _out(await _call(store, "recipe", recipe, _persons(persons)))
+    return await _out(await _call(store, "recipe", recipe, _persons(persons)))
 
 
 @_tool(READ)
@@ -191,8 +209,8 @@ async def list_recipes(
     like aftensmad or aftensmad/pastaretter, an unknown one answers with the list. Use get_recipe."""
     limit = max(1, min(limit, MAX_RESULTS))
     if not tags and not category:
-        return _out(await _each(_names(stores), lambda s: s.featured_recipes(limit)))
-    return _out(
+        return await _out(await _each(_names(stores), lambda s: s.featured_recipes(limit)))
+    return await _out(
         await _each(_names(stores), lambda s: s.recipes_by_tag(tags or [], category, limit))
     )
 
@@ -206,7 +224,7 @@ async def list_offers(stores: list[str] | None = None, limit: int = 25) -> dict:
     (see the server log). Free gifts come from a separate search and are not cut by `limit`.
     They have price 0 and "max_per_order". Use them when they fit the plan."""
     limit = max(1, min(limit, MAX_RESULTS))
-    return _out(await _each(_names(stores), lambda s: s.offers(limit)))
+    return await _out(await _each(_names(stores), lambda s: s.offers(limit)))
 
 
 @_tool(READ)
@@ -221,7 +239,7 @@ async def get_nutrition(store: str, product_ids: list[str]) -> dict:
         raise ToolError(
             "Ingen vare-id'er angivet." if not ids else f"Højst {MAX_ITEMS} varer pr. kald."
         )
-    return _out({"products": await _call(store, "nutrition", ids)})
+    return await _out({"products": await _call(store, "nutrition", ids)})
 
 
 @_tool(READ)
@@ -240,7 +258,7 @@ async def compare_basket(items: list[str], stores: list[str] | None = None) -> d
     if len(items) > MAX_ITEMS:
         raise ToolError(f"Højst {MAX_ITEMS} varer pr. liste.")
     quotes = await _each(_names(stores), lambda s: compare.quote(s, items))
-    return _out({"stores": quotes, **compare.verdict(quotes)})
+    return await _out({"stores": quotes, **compare.verdict(quotes)})
 
 
 @_tool(READ)
@@ -251,8 +269,8 @@ async def get_cart(store: str | None = None) -> dict:
     (e.g. no login) as {"error": ...} next to the others. REMA 1000: the cart is the shopping
     list "handle-mcp" in REMA's app, where the human orders."""
     if store is not None:
-        return _out(await _call(store, "cart"))
-    return _out(await _each(_names(None), links.cart))
+        return await _out(await _call(store, "cart"))
+    return await _out(await _each(_names(None), links.cart))
 
 
 @_tool(WRITE)
@@ -271,7 +289,7 @@ async def set_cart_quantities(store: str, items: dict[str, Count]) -> dict:
     results = await _call(store, "set_quantities", dict(items))
     cart = await _call(store, "cart", False)
     telemetry.cart_filled(store, cart, results)
-    return _out({"results": results, "cart": cart})
+    return await _out({"results": results, "cart": cart})
 
 
 @_tool(ADD)
@@ -308,7 +326,7 @@ async def add_recipe_to_cart(
     added = recipe_cart.report(lines, before, results)
     cart = await _call(store, "cart", False)
     telemetry.cart_filled(store, cart, results)
-    return _out({"added": added, "skipped": skipped, "cart": cart})
+    return await _out({"added": added, "skipped": skipped, "cart": cart})
 
 
 @_tool(READ)
@@ -317,7 +335,7 @@ async def get_delivery_info(store: str) -> dict:
     `delivery_mode` is "home", "pickup" (BilkaToGo, REMA 1000, with `pickup_store`) or null when
     unknown."""
     info, terms = await asyncio.gather(_call(store, "delivery_info"), _call(store, "terms"))
-    return _out({"delivery": info, "terms": terms})
+    return await _out({"delivery": info, "terms": terms})
 
 
 @_tool(READ)
@@ -329,7 +347,7 @@ async def list_delivery_slots(stores: list[str] | None = None, days: int = 7) ->
     fee. Only reads: it never chooses a time, store or mode. The human chooses on the store's
     website."""
     days = max(1, min(days, MAX_DAYS))
-    return _out(await _each(_names(stores), lambda s: _slots(s, days)))
+    return await _out(await _each(_names(stores), lambda s: _slots(s, days)))
 
 
 async def _slots(store: registry.Store, days: int) -> dict:
@@ -344,13 +362,13 @@ async def _slots(store: registry.Store, days: int) -> dict:
 async def get_orders(store: str, limit: int = 10) -> dict:
     """List recent orders in one store (newest first). Use get_order for the lines."""
     limit = max(1, min(limit, MAX_RESULTS))
-    return _out({"orders": await _call(store, "orders", limit)})
+    return await _out({"orders": await _call(store, "orders", limit)})
 
 
 @_tool(READ)
 async def get_order(store: str, order_id: str) -> dict:
     """Show one order with what was bought."""
-    return _out(await _call(store, "order", order_id))
+    return await _out(await _call(store, "order", order_id))
 
 
 def main() -> None:

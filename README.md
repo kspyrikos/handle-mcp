@@ -58,6 +58,18 @@ Then ask:
 
 Other stores, Claude Desktop, headless machines and AI agents (`--from-env`): [setup](docs/setup.md). nemlig's offers and REMA 1000's search work with no login. No terminal? [Join the waitlist](https://handlemcp.dk).
 
+## English output (local translation)
+
+Store product names, categories, offers, recipes and other display text are Danish at the source.
+handle-mcp translates these fields into English with [Argos Translate](https://github.com/argosopentech/argos-translate),
+which runs locally and does not send store text to a translation API. The Danish-to-English model
+is downloaded automatically the first time a tool returns translatable text; that first response
+needs an internet connection. Later translations run offline.
+
+Set `HANDLE_LANGUAGE=da` to keep the original Danish text. English is the default. Translation
+failures fall back to the original store text and do not prevent grocery tools from working.
+Product IDs, EANs, URLs, prices, quantities, units and separate brand fields are never translated.
+
 ## Tools
 
 | Tool | Writes? | What |

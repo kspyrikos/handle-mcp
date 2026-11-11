@@ -26,7 +26,7 @@ from typing import Any
 from keyring.errors import KeyringError
 
 from handle_mcp import stores as registry
-from handle_mcp import telemetry
+from handle_mcp import telemetry, translation
 
 
 def configure_logging() -> None:
@@ -50,7 +50,7 @@ def main(mcp: Any) -> None:
 
 
 def _say(text: str) -> None:
-    sys.stderr.write(text + "\n")
+    sys.stderr.write(translation.translate_text(text) + "\n")
 
 
 def run(args: list[str]) -> int:
@@ -70,7 +70,7 @@ def run(args: list[str]) -> int:
         return _login_from_env(store)
 
     _say(f"Log ind på {store}. Brug den email og det kodeord, du bruger på butikkens hjemmeside.")
-    sys.stderr.write(f"Email til {store}: ")
+    sys.stderr.write(translation.translate_text(f"Email til {store}: "))
     sys.stderr.flush()
     email = sys.stdin.readline().strip()
     password = getpass.getpass(f"Kodeord til {store} (vises ikke): ")
@@ -135,7 +135,7 @@ def _login_from_env(store: str) -> int:
 
 
 def _ask(text: str) -> str:
-    sys.stderr.write(text)
+    sys.stderr.write(translation.translate_text(text))
     sys.stderr.flush()
     return sys.stdin.readline().strip()
 
