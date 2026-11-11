@@ -41,7 +41,7 @@ async def test_retries_5xx_and_429_with_backoff(no_sleep):
 
 async def test_gives_up_after_retries():
     c, calls = client([503])
-    with pytest.raises(StoreError, match="Butik svarer 503"):
+    with pytest.raises(StoreError, match="Butik returned HTTP 503"):
         await _http.request(c, "GET", "https://x.test/a", "Butik")
     assert len(calls) == _http.RETRIES + 1
 
@@ -60,13 +60,13 @@ async def test_timeout_and_network_errors_are_retried_then_clear():
     assert len(calls) == 3
 
     c, calls = client([httpx.ConnectError("down")])
-    with pytest.raises(StoreError, match="Butik svarer ikke \\(ConnectError\\)"):
+    with pytest.raises(StoreError, match="Butik is not responding \\(ConnectError\\)"):
         await _http.request(c, "GET", "https://x.test/a", "Butik")
     assert len(calls) == _http.RETRIES + 1
 
 
 async def test_other_http_errors_are_not_retried():
     c, calls = client([httpx.TooManyRedirects("loop")])
-    with pytest.raises(StoreError, match="Kan ikke nå Butik"):
+    with pytest.raises(StoreError, match="Could not reach Butik"):
         await _http.request(c, "GET", "https://x.test/a", "Butik")
     assert len(calls) == 1

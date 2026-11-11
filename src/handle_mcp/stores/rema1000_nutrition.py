@@ -18,8 +18,8 @@ from handle_mcp.stores._http import per_product, request
 from handle_mcp.stores.rema1000_auth import API, HEADERS, NAME
 
 BASIS = {"kg": "100 g", "ltr": "100 ml", "l": "100 ml"}
-NO_LABEL = "REMA 1000 viser ingen næringsdeklaration for varen (ofte frisk kød, frugt og grønt)."
-UNKNOWN = "REMA 1000 kender ikke varen."
+NO_LABEL = "REMA 1000 does not provide a nutrition label for this product (often the case for fresh meat, fruit and vegetables)."
+UNKNOWN = "REMA 1000 does not recognize this product."
 
 
 def product_nutrition(data: dict) -> ProductNutrition:
@@ -46,7 +46,7 @@ class RemaNutritionMixin:
     async def nutrition(self, product_ids: list[str]) -> list[ProductNutrition]:
         if bad := [i for i in product_ids if not re.fullmatch(r"\d{1,12}", i)]:
             raise StoreError(
-                f"Ukendt vare-id hos REMA 1000: {', '.join(bad)}. Brug id'et fra søgningen."
+                f"Unknown product ID at REMA 1000: {', '.join(bad)}. Use the ID returned by product search."
             )
 
         async def one(pid: str) -> ProductNutrition:
@@ -61,16 +61,16 @@ class RemaNutritionMixin:
             if resp.status_code == 404:
                 raise NotFound(UNKNOWN)
             if resp.status_code != 200:
-                raise StoreError(f"REMA 1000 svarer {resp.status_code}. Prøv igen senere.")
+                raise StoreError(f"REMA 1000 returned HTTP {resp.status_code}. Try again later.")
             try:
                 return product_nutrition(resp.json())
             except ValueError as exc:  # a queue or bot page instead of JSON: never work around it
                 raise StoreError(
-                    "REMA 1000 svarer ikke med data lige nu. Prøv igen senere."
+                    "REMA 1000 is not returning data right now. Try again later."
                 ) from exc
             except (KeyError, IndexError, TypeError, AttributeError) as exc:
                 raise StoreError(
-                    "REMA 1000 har ændret sit svar. handle-mcp skal opdateres."
+                    "REMA 1000 has changed its response. handle-mcp needs to be updated."
                 ) from exc
 
         return await per_product("rema1000", product_ids, one, UNKNOWN)

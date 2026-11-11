@@ -130,7 +130,7 @@ def store(api, monkeypatch):
 
 async def test_no_list_is_an_empty_cart(store, api):
     cart = await store.get_cart()
-    assert cart.lines == [] and cart.total == 0 and "findes ikke endnu" in cart.warnings[0]
+    assert cart.lines == [] and cart.total == 0 and "does not exist yet" in cart.warnings[0]
     assert cart.delivery_mode == "pickup" and cart.pickup_store == "Aalborg C, Hasseris"
     assert api.writes == []  # reading never creates the list
 
@@ -142,7 +142,7 @@ async def test_first_write_creates_the_list_never_primary(store, api):
     cart = await store.get_cart()
     assert [(li.product_id, li.quantity) for li in cart.lines] == [("20302", 2), ("200", 3)]
     # 2 x 7.95 + offer: 2 x 10 and 1 over the limit at 15
-    assert cart.total == Decimal("15.90") + Decimal(35) and "betaler selv" in cart.warnings[0]
+    assert cart.total == Decimal("15.90") + Decimal(35) and "pay yourself" in cart.warnings[0]
 
 
 async def test_never_touches_another_list(store, api):
@@ -212,7 +212,7 @@ async def test_two_lists_use_the_lowest_id_and_warn_by_count(store, api):
     api.lists[10] = {"id": 10, "name": "handle-mcp", "primary": False, "items": []}
     cart = await store.get_cart()
     assert [li.product_id for li in cart.lines] == ["100"]  # 9, not 10: ids compared as numbers
-    assert any("1 liste(r) mere" in w for w in cart.warnings)
+    assert any("1 more list(s)" in w for w in cart.warnings)
     assert all("Indkøb" not in w for w in cart.warnings)
     await store.set_quantities({"20302": 1})
     assert api.lists[10]["items"] == [] and len(api.lists) == 3  # nothing deleted
@@ -237,7 +237,7 @@ async def test_post_that_never_lands_fails_that_product_only(store, api):
     api.lost = ["dropped", "dropped", "dropped"]
     results = await store.set_quantities({"100": 3, "20302": 2})
     assert results[0].ok and results[0].applied == 3
-    assert not results[1].ok and "kom ikke på listen" in results[1].message
+    assert not results[1].ok and "was not added to the list" in results[1].message
 
 
 async def test_items_null_and_odd_last_page(store, api):
@@ -273,8 +273,8 @@ async def test_unknown_product_is_refused_and_the_rest_goes_in(store, api):
     )
     assert [r.ok for r in results] == [False, True, False, False, False, False]
     assert len(api.mine()["items"]) == 1  # "020302" added no second line
-    assert "afviste varen (422)" in results[0].message and "Ugyldigt" in results[2].message
-    assert "Ugyldigt" in results[3].message
+    assert "rejected the product (422)" in results[0].message and "Invalid product ID" in results[2].message
+    assert "Invalid product ID" in results[3].message
 
 
 async def test_failed_cleanup_still_reports_each_product(store, api):
@@ -288,8 +288,8 @@ async def test_failed_cleanup_still_reports_each_product(store, api):
 
     store._client = httpx.AsyncClient(transport=httpx.MockTransport(refuse_cleanup))
     results = await store.set_quantities({"20302": 3, "100": 0})
-    assert results[0].ok and "fjernede ikke" in results[0].message
-    assert not results[1].ok and "Listen har 1" in results[1].message
+    assert results[0].ok and "did not remove" in results[0].message
+    assert not results[1].ok and "The list has 1" in results[1].message
 
 
 async def test_store_without_click_and_collect_still_has_the_list(store, api):

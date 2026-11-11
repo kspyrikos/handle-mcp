@@ -136,17 +136,17 @@ async def test_bilka_reads_every_id_in_one_request_without_a_login():
         protein="8.6",
         salt="0.13",
     )
-    assert mince.nutrition is None and "næringsdeklaration" in mince.reason
+    assert mince.nutrition is None and "nutrition label" in mince.reason
     assert bread.nutrition.energy_kj == "1017" and bread.nutrition.fibre == "7.5"
     assert (unknown.id, unknown.nutrition, unknown.reason) == (
         "999",
         None,
-        "BilkaToGo kender ikke varen.",
+        "BilkaToGo does not recognize this product.",
     )
 
 
 async def test_bilka_rejects_ids_that_are_not_item_numbers():
-    with pytest.raises(StoreError, match="Ukendt vare-id"):
+    with pytest.raises(StoreError, match="Unknown product ID"):
         await _bilka([]).nutrition(["19753) OR (x"])
 
 
@@ -154,7 +154,7 @@ async def test_bilka_format_change_is_a_clear_error():
     store = BilkaStore(
         httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={})))
     )
-    with pytest.raises(StoreError, match="ændret format"):
+    with pytest.raises(StoreError, match="changed format"):
         await store.nutrition(["19753"])
 
 
@@ -206,8 +206,8 @@ async def test_nemlig_reads_the_declaration_table(no_nemlig_login):
         protein="3.6",
         salt="0.11",
     )
-    assert steak.nutrition is None and "næringsdeklaration" in steak.reason
-    assert (unknown.nutrition, unknown.reason) == (None, "nemlig kender ikke varen.")
+    assert steak.nutrition is None and "nutrition label" in steak.reason
+    assert (unknown.nutrition, unknown.reason) == (None, "nemlig does not recognize this product.")
     calls = [r for r in seen if "productDetails" in r.url.path]
     assert len(calls) == 3 and all(r.headers["Authorization"] == "Bearer anon" for r in calls)
 
@@ -227,7 +227,7 @@ async def test_nemlig_one_failure_keeps_the_others(no_nemlig_login):
 
 async def test_nemlig_rejects_ids_that_are_not_product_numbers():
     store, seen = _nemlig({})
-    with pytest.raises(StoreError, match="Ukendt vare-id"):
+    with pytest.raises(StoreError, match="Unknown product ID"):
         await store.nutrition(["../basket"])
     assert seen == []
 
@@ -243,7 +243,7 @@ async def test_tool_answers_strings_not_money():
 
 
 @pytest.mark.parametrize(
-    ("ids", "match"), [([], "Ingen vare-id"), ([str(i) for i in range(51)], "Højst 50")]
+    ("ids", "match"), [([], "No product ID"), ([str(i) for i in range(51)], "At most 50")]
 )
 async def test_tool_rejects_bad_input(ids, match):
     with pytest.raises(ToolError, match=match):
@@ -251,7 +251,7 @@ async def test_tool_rejects_bad_input(ids, match):
 
 
 async def test_tool_in_a_store_without_labels_is_polite():
-    with pytest.raises(ToolError, match="broken kan ikke det endnu"):  # NotImplementedError
+    with pytest.raises(ToolError, match="broken does not support this yet"):  # NotImplementedError
         await server.get_nutrition("broken", ["1"])
 
 
@@ -290,8 +290,8 @@ async def test_rema_reads_nutrition_info_without_a_login():
         fibre="<0.5",
     )
     assert milk.nutrition.per == "100 ml"  # compare unit ltr
-    assert mince.nutrition is None and "næringsdeklaration" in mince.reason
-    assert (unknown.nutrition, unknown.reason) == (None, "REMA 1000 kender ikke varen.")
+    assert mince.nutrition is None and "nutrition label" in mince.reason
+    assert (unknown.nutrition, unknown.reason) == (None, "REMA 1000 does not recognize this product.")
     assert all(r.url.params["include"] == "nutrition_info" for r in seen)
     assert not any("Authorization" in r.headers or "cookie" in r.headers for r in seen)
 
@@ -304,7 +304,7 @@ async def test_rema_whole_failure_says_why():
 
 async def test_rema_rejects_ids_that_are_not_product_numbers():
     store, seen = _rema({})
-    with pytest.raises(StoreError, match="Ukendt vare-id"):
+    with pytest.raises(StoreError, match="Unknown product ID"):
         await store.nutrition(["../lists"])
     assert seen == []
 
@@ -313,21 +313,21 @@ async def test_rema_one_failure_keeps_the_others():
     store, _ = _rema({"20385": "product_skyr", "2": 500, "400171": "product_oksekoed"})
     skyr, broken, mince = await store.nutrition(["20385", "2", "400171"])
     assert skyr.nutrition is not None and mince.reason
-    assert broken.nutrition is None and broken.reason == "REMA 1000 svarer 500. Prøv igen senere."
+    assert broken.nutrition is None and broken.reason == "REMA 1000 returned HTTP 500. Try again later."
 
 
 async def test_nemlig_unknown_and_failing_products_get_their_own_reason(no_nemlig_login):
     store, _ = _nemlig({"5070417": fixture("nemlig", "product_details_cocio"), "2": 500})
     cocio, broken, unknown = await store.nutrition(["5070417", "2", "3"])
     assert cocio.nutrition is not None
-    assert broken.reason == "nemlig.com svarer 500. Prøv igen senere."
-    assert unknown.reason == "nemlig kender ikke varen."
+    assert broken.reason == "nemlig.com returned HTTP 500. Try again later."
+    assert unknown.reason == "nemlig does not recognize this product."
 
 
 async def test_only_unknown_products_is_an_answer_not_an_error(no_nemlig_login):
     store, _ = _nemlig({})
     (unknown,) = await store.nutrition(["3"])
-    assert unknown.reason == "nemlig kender ikke varen."
+    assert unknown.reason == "nemlig does not recognize this product."
 
 
 async def test_tool_keeps_the_order_and_drops_duplicates():

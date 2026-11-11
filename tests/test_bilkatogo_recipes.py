@@ -76,7 +76,7 @@ def test_recipe_path_from_link_or_path(given):
 
 @pytest.mark.parametrize("bad", ["../etc", "karbo nader", "", "https://www.bilkatogo.dk/"])
 def test_recipe_path_must_be_a_path(bad):
-    with pytest.raises(StoreError, match="Kender ikke"):
+    with pytest.raises(StoreError, match="Unknown"):
         recipe_path(bad)
 
 
@@ -110,7 +110,7 @@ async def test_recipe_has_text_and_products(store, fake):
 
 async def test_no_products_found_is_a_clear_error(store, fake):
     fake.scripted["/1/indexes/*/queries"] = [{"results": [{"hits": []}]}]
-    with pytest.raises(StoreError, match="ingen af opskriftens varer"):
+    with pytest.raises(StoreError, match="did not find any of the recipe products"):
         await store.recipe(KARBONADER)
 
 
@@ -142,7 +142,7 @@ async def test_method_and_tips_in_one_paragraph(store, fake):
 
 
 async def test_a_category_page_is_not_a_recipe(store):
-    with pytest.raises(StoreError, match="ikke en opskrift"):
+    with pytest.raises(StoreError, match="is not a BilkaToGo recipe"):
         await store.recipe("aftensmad")
 
 
@@ -166,14 +166,14 @@ async def test_category_with_sub_categories_mixes_them(store, site):
 
 
 async def test_unknown_category_lists_the_real_ones(store):
-    with pytest.raises(StoreError, match="kender ikke kategorien 'pandekager'.*aftensmad, frokost"):
+    with pytest.raises(StoreError, match="does not recognize category 'pandekager'.*aftensmad, frokost"):
         await store.recipes_by_tag([], "pandekager")
 
 
 async def test_tags_and_search_say_what_to_use(store):
-    with pytest.raises(StoreError, match="ingen tags"):
+    with pytest.raises(StoreError, match="does not support tags"):
         await store.recipes_by_tag(["Familievenlig"])
-    with pytest.raises(StoreError, match="ingen opskriftssøgning"):
+    with pytest.raises(StoreError, match="does not support recipe search"):
         await store.recipes("karry")
 
 
@@ -186,5 +186,5 @@ async def test_new_build_id_is_read_again(store, site):
 
 async def test_no_build_id_is_a_clear_error(store, site):
     site.build = "nope"  # the HTML has no build id
-    with pytest.raises(StoreError, match="ændret format: ingen build"):
+    with pytest.raises(StoreError, match="format has changed: no build ID"):
         await store.featured_recipes()

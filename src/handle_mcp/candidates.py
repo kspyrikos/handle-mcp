@@ -1,10 +1,10 @@
 """Candidates for one list item: the products the caller (an AI model or a human) picks from.
 
 The matcher only suggests. Each candidate carries plain facts, so the caller can decide with
-the user's own taste instead of hidden word rules: is 'Babymajs' fine, is øko worth it?
+the user's own taste instead of hidden word rules: is 'Babymajs' acceptable, is organic worth it?
 - The suggested product comes first, then the next best, at most LIMIT in all.
-- An øko product is always among them when the search found one.
-- Flags say what the matcher saw: name match, size fits, prepared, processed, blend, øko.
+- An organic product is always among them when the search found one.
+- Flags say what the matcher saw: name match, size fits, prepared, processed, blend and organic status.
   An unknown fact or a flag that is false is left out, to keep the answer small.
   `size_fits` is shown when false: the size does not fit.
 """

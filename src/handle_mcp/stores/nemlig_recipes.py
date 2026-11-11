@@ -25,7 +25,7 @@ def recipe_slug(recipe: str) -> str:
     '/opskrifter/kebabfad-98001303' or just 'kebabfad-98001303' → 'kebabfad-98001303'."""
     slug = recipe.strip().split("?")[0].split("#")[0].rstrip("/").rsplit("/", 1)[-1].lower()
     if not SLUG.match(slug):
-        raise StoreError(f"Kender ikke opskriften {recipe!r}. Brug linket fra nemlig.com.")
+        raise StoreError(f"Unknown recipe {recipe!r}. Use the link from nemlig.com.")
     return slug
 
 
@@ -35,7 +35,7 @@ def category_path(category: str) -> str:
     for a, b in (("æ", "ae"), ("ø", "oe"), ("å", "aa")):
         path = path.replace(a, b)
     if not SLUG.match(path):
-        raise StoreError(f"Kender ikke kategorien {category!r}. Brug fx aftensmad eller frokost.")
+        raise StoreError(f"Unknown category {category!r}. Try aftensmad or frokost.")
     return path
 
 
@@ -119,7 +119,7 @@ class RecipesMixin:
         data = await self._api("GET", f"{BFF}/search/recipes", params=params) or {}
         hits = (data.get("searchResult") or {}).get("items")
         if not isinstance(hits, list):
-            raise StoreError("nemlig-opskrifter har ændret format.")
+            raise StoreError("nemlig recipe data has changed format.")
         return [
             Recipe(
                 store=self.name,
@@ -144,7 +144,7 @@ class RecipesMixin:
         )
         details, dialog = details or {}, dialog or {}
         if "includedProducts" not in dialog:
-            raise StoreError("nemlig-opskriften har ændret format.")
+            raise StoreError("nemlig recipe data has changed format.")
         items = _items(dialog["includedProducts"] or [], False)
         items += _items(dialog.get("selfSuppliedProducts") or [], True)
         limits = dialog.get("servingLimits") or details.get("servingLimits") or {}
@@ -183,7 +183,7 @@ class RecipesMixin:
         page = await self._api("GET", f"{BFF}/page", params={"path": "/maaltider"}) or {}
         blocks = [b for b in page.get("pageContent") or [] if "recipes" in b]
         if not blocks:
-            raise StoreError("Fandt ingen opskrifter i nemligs 'Ugens udvalgte'.")
+            raise StoreError("No recipes were found in nemlig's 'Ugens udvalgte'.")
         return [
             Recipe(
                 store=self.name,
@@ -209,7 +209,7 @@ class RecipesMixin:
             path = known.get(tag.strip().lower())
             if not path:
                 names = ", ".join(self._tag_names)
-                raise StoreError(f"nemlig kender ikke tagget {tag!r}. Brug et af: {names}.")
+                raise StoreError(f"nemlig does not recognize tag {tag!r}. Use one of: {names}.")
             paths.append(path)
         params: dict[str, Any] = {"skip": 0, "take": limit, "filters": paths}
         if category:
@@ -217,7 +217,7 @@ class RecipesMixin:
         data = await self._api("GET", f"{BFF}/meals/allRecipes", params=params) or {}
         found = data.get("requestedCategory") or {}
         if not isinstance(found.get("recipes"), list):
-            raise StoreError("nemlig-opskrifter har ændret format.")
+            raise StoreError("nemlig recipe data has changed format.")
         return [
             Recipe(
                 store=self.name,
@@ -241,7 +241,7 @@ class RecipesMixin:
                 if f.get("path")
             ]
             if not found:
-                raise StoreError("nemlig-opskrifter har ændret format: ingen tags.")
+                raise StoreError("nemlig recipe data has changed format: no tags.")
             self._tag_names = [str(f.get("title") or f["path"]).strip() for f in found]
             self._tags = {
                 key.strip().lower(): f["path"]

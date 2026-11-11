@@ -52,7 +52,7 @@ def recipe_path(recipe: str) -> str:
     path = path.split("bilkatogo.dk", 1)[-1].strip("/")
     path = path.removeprefix(ROOT.strip("/")).strip("/")
     if not path or not SLUG.match(path):
-        raise StoreError(f"Kender ikke {recipe!r}. Brug linket fra bilkatogo.dk/inspiration.")
+        raise StoreError(f"Unknown recipe {recipe!r}. Use the link from bilkatogo.dk/inspiration.")
     return path
 
 
@@ -70,7 +70,7 @@ def js_object(src: str) -> dict:
     try:
         s = src[src.index("{") : src.rindex("}") + 1]
     except ValueError:
-        raise StoreError("BilkaToGo-siden har ændret format.") from None
+        raise StoreError("BilkaToGo page format has changed.") from None
     out, i = [], 0
     while i < len(s):
         c = s[i]
@@ -92,9 +92,9 @@ def js_object(src: str) -> dict:
     try:
         data = json.loads("".join(out))
     except ValueError:
-        raise StoreError("BilkaToGo-siden har ændret format.") from None
+        raise StoreError("BilkaToGo page format has changed.") from None
     if not isinstance(data, dict):
-        raise StoreError("BilkaToGo-siden har ændret format.")
+        raise StoreError("BilkaToGo page format has changed.")
     return data
 
 
@@ -229,19 +229,19 @@ class BilkaRecipesMixin:
             if resp.status_code == 200 and resp.text.startswith("__NUXT_JSONP__"):
                 page = ((js_object(resp.text).get("data") or [{}])[0] or {}).get("page")
                 if not isinstance(page, dict):
-                    raise StoreError("BilkaToGo-siden har ændret format.")
+                    raise StoreError("BilkaToGo page format has changed.")
                 return page
-        raise NoPage(f"BilkaToGo har ingen side {ROOT}{path}/.")
+        raise NoPage(f"BilkaToGo has no page at {ROOT}{path}/.")
 
     async def _read_build(self) -> None:
         resp = await self._send("GET", f"{SITE}{ROOT}")
         if resp.status_code != 200 or not (m := BUILD.search(resp.text)):
-            raise StoreError("BilkaToGo-opskrifter har ændret format: ingen build.")
+            raise StoreError("BilkaToGo recipe data format has changed: no build ID was found.")
         self._build = m.group(1)
 
     async def recipes(self, query: str, limit: int = 5) -> list[Recipe]:
         raise StoreError(
-            "BilkaToGo har ingen opskriftssøgning. Brug list_recipes med category, "
+            "BilkaToGo does not support recipe search. Use list_recipes with category, "
             "fx aftensmad eller aftensmad/danske-retter."
         )
 
@@ -250,7 +250,7 @@ class BilkaRecipesMixin:
         page = await self._page(FEATURED)
         found = [_recipe(self.name, path, name, group) for path, name, group in _cards(page)]
         if not found:
-            raise StoreError("Fandt ingen opskrifter i BilkaToGos madplan.")
+            raise StoreError("No recipes were found in the BilkaToGo meal plan.")
         return found[:limit]
 
     async def recipes_by_tag(
@@ -260,7 +260,7 @@ class BilkaRecipesMixin:
         "aftensmad/danske-retter". A category with sub-categories gives their recipes, mixed."""
         if tags:
             raise StoreError(
-                "BilkaToGo har ingen tags. Brug category, fx aftensmad, aftensmad/pastaretter, "
+                "BilkaToGo does not support tags. Use category, e.g. aftensmad, aftensmad/pastaretter, "
                 "boern-i-koekkenet eller nemme."
             )
         path = category_path(category or "aftensmad")
@@ -269,11 +269,11 @@ class BilkaRecipesMixin:
         except NoPage:
             top = [c[0] for c in _cards(await self._page(""))]
             raise StoreError(
-                f"BilkaToGo kender ikke kategorien {category!r}. Brug fx: {', '.join(top)}."
+                f"BilkaToGo does not recognize category {category!r}. Try: {', '.join(top)}."
             ) from None
         mixed = [r for row in zip_longest(*groups) for r in row if r]  # one from each, in turn
         if not mixed:
-            raise StoreError(f"Fandt ingen opskrifter i BilkaToGos kategori {category!r}.")
+            raise StoreError(f"No recipes were found in BilkaToGo category {category!r}.")
         return mixed[:limit]
 
     async def _collect(self, path: str, depth: int, seen: dict[str, dict]) -> list[list[Recipe]]:
@@ -306,11 +306,11 @@ class BilkaRecipesMixin:
             if isinstance(s, str) and SKU.match(s)  # item numbers only: they go in a filter
         ]
         if not ingredients and not skus:
-            raise StoreError(f"{ROOT}{path}/ er ikke en opskrift hos BilkaToGo.")
+            raise StoreError(f"{ROOT}{path}/ is not a BilkaToGo recipe.")
         skus = list(dict.fromkeys(skus))
         products = {p.id: p for p in await self._algolia("", len(skus), ids=skus)} if skus else {}
         if skus and not products:  # the lookup by item number itself failed, or nothing is sold
-            raise StoreError("BilkaToGo fandt ingen af opskriftens varer i din butik.")
+            raise StoreError("BilkaToGo did not find any of the recipe products at your store.")
         items = [
             RecipeItem(
                 ingredient=p.name,

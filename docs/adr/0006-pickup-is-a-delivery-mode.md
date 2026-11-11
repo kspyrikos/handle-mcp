@@ -10,7 +10,7 @@ BilkaToGo decides from the cart's `deliveryAddress`, in one place (`_mode()` in 
 
 - **home:** `dawa_uid` or `recipient_name` is set.
 - **pickup:** no home marker, a `sid`, and `name` starts with `Bilka`.
-- **unknown (`null`):** anything else. The answer says `BilkaToGo viser ikke, om kurven er sat til hjemlevering eller afhentning. Vælg det på bilkatogo.dk.` and `list_delivery_slots` refuses.
+- **unknown (`null`):** anything else. The answer says `BilkaToGo does not indicate whether the cart is set to home delivery or pickup. Choose on bilkatogo.dk.` and `list_delivery_slots` refuses.
 
 On a home cart `name` is the customer's name. So `name` is read only when nothing says home, and only a name that starts with `Bilka` becomes `pickup_store`.
 
@@ -18,8 +18,8 @@ On a home cart `name` is the customer's name. So `name` is read only when nothin
 
 - A pickup cart has no warning. `home_delivery` stays `false`.
 - The pickup fee is the cart's `delivery_price`. `0` is a known fee (`"0.00"`), not a missing one.
-- `list_delivery_slots` lists pickup times with `kind: "Afhentning"`.
-- `compare_basket` adds `Afhentning i <butik>: du henter selv varerne.` The trip to the store is not priced.
+- `list_delivery_slots` lists pickup times with `kind: "Pickup"`.
+- `compare_basket` adds `Pickup at <store>: you collect the products yourself.` The trip to the store is not priced.
 
 ## Rule 1 still holds
 
@@ -27,7 +27,7 @@ Choosing a pickup store, a pickup time or the mode counts as changing the addres
 
 ## Why
 
-Many families pick up at Bilka. Before, a pickup cart only got "Vælg hjemlevering", which is wrong advice for them. Idea and facts from the Go port [McAndersDK/handle-mcp-go](https://github.com/McAndersDK/handle-mcp-go) (MIT).
+Many families pick up at Bilka. Before, a pickup cart only got "Choose home delivery", which is wrong advice for them. Idea and facts from the Go port [McAndersDK/handle-mcp-go](https://github.com/McAndersDK/handle-mcp-go) (MIT).
 
 ## Not proven live
 

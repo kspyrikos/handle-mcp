@@ -37,7 +37,7 @@ async def test_list_round_trip():
     assert up[0].ok, up
     cart = await store.get_cart()
     assert _count(cart, milk.id) == before + 1
-    assert not any("primær" in w for w in cart.warnings), cart.warnings
+    assert not any("primary" in w for w in cart.warnings), cart.warnings
     print(f"[rema1000] efter +1: {before + 1}. Total {cart.total} kr. Advarsler: {cart.warnings}")
 
     down = await store.set_quantities({milk.id: before})

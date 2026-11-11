@@ -38,7 +38,7 @@ def test_login_saves_a_working_login(terminal, memory_keychain, capsys):
     assert registry.keychain_get("fake") == SAVED  # the session, never the password
     out = capsys.readouterr()
     assert out.out == ""  # nothing on stdout, and the password is never shown
-    assert "rigtig" not in out.err and "Logget ind" in out.err
+    assert "rigtig" not in out.err and "Logged in" in out.err
 
 
 def test_wrong_password_saves_nothing(terminal, memory_keychain, capsys):
@@ -56,7 +56,7 @@ def test_logout_removes_the_login(memory_keychain):
 
 def test_unknown_command_or_store_shows_usage(capsys):
     assert cli.run(["login", "netto"]) == 2
-    assert "Brug: handle-mcp login" in capsys.readouterr().err
+    assert "Usage: handle-mcp login" in capsys.readouterr().err
 
 
 def test_failed_relogin_keeps_the_old_login(terminal, memory_keychain):
@@ -75,13 +75,13 @@ def test_logout_without_a_keychain_says_so(monkeypatch, capsys):
 
     monkeypatch.setattr(registry.keyring, "delete_password", no_keychain)
     assert cli.run(["logout", "fake"]) == 1
-    assert "Ingen nøglering" in capsys.readouterr().err
+    assert "No keychain" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("secret", ["not json", '{"email": "a@example.com"}', "[]"])
 def test_broken_keychain_entry_gives_a_clear_error(memory_keychain, secret):
     memory_keychain.secrets[(registry.KEYCHAIN_SERVICE, "fake")] = secret
-    with pytest.raises(registry.StoreError, match="Ugyldigt login i nøgleringen"):
+    with pytest.raises(registry.StoreError, match="Invalid login in the keychain"):
         registry.keychain_get("fake")
 
 
@@ -137,14 +137,14 @@ def test_logout_removes_the_file_too(config_dir, capsys):
     registry.config_set("fake", "a@example.com", OLD)
     assert cli.run(["logout", "fake"]) == 0
     assert not (config_dir / "fake.json").exists()
-    assert "slettet fra config-filen." in capsys.readouterr().err  # one line, not two
+    assert "Login removed from config file." in capsys.readouterr().err  # one line, not two
 
 
 def test_logout_removes_file_and_keychain_in_one_line(config_dir, capsys):
     registry.config_set("fake", "a@example.com", OLD)
     registry.keychain_set("fake", "a@example.com", OLD)
     assert cli.run(["logout", "fake"]) == 0
-    assert "slettet fra config-filen og nøgleringen." in capsys.readouterr().err
+    assert "Login removed from config file and keychain." in capsys.readouterr().err
 
 
 def test_logout_file_only_without_a_keychain(config_dir, monkeypatch, capsys):
@@ -156,7 +156,7 @@ def test_logout_file_only_without_a_keychain(config_dir, monkeypatch, capsys):
     monkeypatch.setattr(registry.keyring, "delete_password", no_keychain)
     registry.config_set("fake", "a@example.com", OLD)
     assert cli.run(["logout", "fake"]) == 0
-    assert "slettet fra config-filen." in capsys.readouterr().err
+    assert "Login removed from config file." in capsys.readouterr().err
 
 
 def test_login_from_env_tightens_an_existing_wide_file(config_dir, monkeypatch):
@@ -178,7 +178,7 @@ def test_login_from_env_warns_when_the_keychain_wins(config_dir, monkeypatch, ca
     monkeypatch.setenv("HANDLE_FAKE_EMAIL", "a@example.com")
     monkeypatch.setenv("HANDLE_FAKE_PASSWORD", "rigtig")
     assert cli.run(["login", "fake", "--from-env"]) == 0
-    assert "nøgleringen har også et login" in capsys.readouterr().err
+    assert "the keychain also has a login" in capsys.readouterr().err
 
 
 def test_missing_login_error_names_the_headless_way(config_dir):
@@ -194,7 +194,7 @@ def test_login_from_env_survives_a_broken_keychain_entry(
     monkeypatch.setenv("HANDLE_FAKE_PASSWORD", "rigtig")
     assert cli.run(["login", "fake", "--from-env"]) == 0
     assert (config_dir / "fake.json").exists()
-    assert "nøgleringen har også et login" in capsys.readouterr().err
+    assert "the keychain also has a login" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -202,7 +202,7 @@ def test_login_from_env_survives_a_broken_keychain_entry(
 )
 def test_entry_without_session_or_password_is_broken(memory_keychain, secret):
     memory_keychain.secrets[(registry.KEYCHAIN_SERVICE, "fake")] = secret
-    with pytest.raises(registry.StoreError, match="Ugyldigt login i nøgleringen"):
+    with pytest.raises(registry.StoreError, match="Invalid login in the keychain"):
         registry.keychain_get("fake")
 
 

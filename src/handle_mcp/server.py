@@ -37,7 +37,7 @@ def _whole(value: Any) -> Any:
     if isinstance(value, bool) or (
         isinstance(value, str) and not re.fullmatch(r"\s*[0-9]+\s*", value)
     ):
-        raise ValueError("Antal skal være et helt tal, fx 2.")
+        raise ValueError("Quantity must be a whole number, e.g. 2.")
     return value
 
 
@@ -75,8 +75,8 @@ _instances: dict[str, registry.Store] = {}
 
 def _store(name: str) -> registry.Store:
     if name not in registry.STORES:
-        known = ", ".join(sorted(registry.STORES)) or "ingen endnu"
-        raise ToolError(f"Ukendt butik '{name}'. Kendte butikker: {known}.")
+        known = ", ".join(sorted(registry.STORES)) or "none yet"
+        raise ToolError(f"Unknown store '{name}'. Known stores: {known}.")
     if name not in _instances:
         _instances[name] = registry.STORES[name]()
     return _instances[name]
@@ -85,7 +85,7 @@ def _store(name: str) -> registry.Store:
 def _names(requested: list[str] | None) -> list[str]:
     names = requested or sorted(registry.STORES)
     if not names:
-        raise ToolError("Ingen butikker er sat op endnu.")
+        raise ToolError("No stores are configured yet.")
     for name in names:
         _store(name)  # fail early on an unknown name
     return names
@@ -129,11 +129,11 @@ def _error_text(store: str, exc: BaseException) -> str:
 
 def _error_reason(store: str, exc: BaseException) -> str:
     if isinstance(exc, NotImplementedError):
-        return f"{store} kan ikke det endnu."
+        return f"{store} does not support this yet."
     if isinstance(exc, registry.StoreError):
         return f"{store}: {exc}"
     log.exception("%s failed", store, exc_info=exc)
-    return f"{store}: uventet fejl ({type(exc).__name__}). Se serverens log."
+    return f"{store}: unexpected error ({type(exc).__name__}). See the server log."
 
 
 async def _call(store: str, method: str, *args: Any) -> Any:
@@ -172,23 +172,23 @@ async def search_products(
 
 @_tool(READ)
 async def search_recipes(query: str, stores: list[str] | None = None, limit: int = 5) -> dict:
-    """Find the stores' own recipes, e.g. "kylling karry". Returns name and link.
-    Use get_recipe for time, persons and the products to buy.
-    nemlig only: BilkaToGo has no recipe search, use list_recipes with `category` there."""
+    """Find the stores' own recipes, e.g. "chicken curry". Returns each recipe's name and link.
+    Use get_recipe for preparation time, serving count and shopping ingredients.
+    nemlig only: BilkaToGo has no recipe search; use list_recipes with `category` instead."""
     limit = max(1, min(limit, MAX_RESULTS))
     return await _out(await _each(_names(stores), lambda s: s.recipes(query, limit)))
 
 
 @_tool(READ)
 async def get_recipe(store: str, recipe: str, persons: int | None = None) -> dict:
-    """The products to buy for one of the store's recipes, as on its "Se varer og læg i kurv":
-    per ingredient the store's product, packs for `persons` and alternatives. `have_at_home`
-    items (salt, oil) are what the store assumes you have: left out of `total`, ask first.
-    Also `image`, `description`, `method`, `tip`. Scale `ingredients` from `ingredients_persons`.
-    `recipe` is the recipe's link or id from search_recipes or list_recipes. Put the products
-    in the cart with add_recipe_to_cart after the human says yes.
-    BilkaToGo: one pack per product, no alternatives; `persons` is fixed (null for pieces).
-    `missing`: product ids not sold at the address: say so to the human."""
+    """Return the shopping ingredients for one of the store's recipes. Each ingredient includes
+    the store's product, pack count for `persons`, and alternatives. `have_at_home` items
+    (such as salt and oil) are assumed to be available: they are excluded from `total`, so ask
+    before adding them. Also returns `image`, `description`, `method` and `tip`. Scale
+    `ingredients` using `ingredients_persons`. `recipe` is the recipe link or ID returned by
+    search_recipes or list_recipes. Use add_recipe_to_cart only after the human approves.
+    BilkaToGo: one pack per product, no alternatives; `persons` is fixed (null for piece counts).
+    `missing` lists product IDs not sold at the delivery address."""
     return await _out(await _call(store, "recipe", recipe, _persons(persons)))
 
 
@@ -199,14 +199,14 @@ async def list_recipes(
     category: str | None = None,
     limit: int = 20,
 ) -> dict:
-    """Browse the store's recipes, with link. No tags or category: this week's featured
-    recipes (nemlig: "Ugens udvalgte"). With `tags`: recipes that have every tag, e.g.
-    ["Familievenlig", "Budgetvenlig"] or ["Under 30 min", "Kylling"]. nemlig's tags include
-    Under 20/30 min, Budgetvenlig, Familievenlig, Populær, Mad til flere dage, Vegetarisk,
-    Kylling, Fisk, Oksekød, Gris and cuisines; an unknown tag answers with the full list.
-    `category` (nemlig: aftensmad by default, frokost, madpakke, morgenmad, ...).
-    BilkaToGo: no tags; no category is this week's "Madplan" (7 dinners); `category` is a path
-    like aftensmad or aftensmad/pastaretter, an unknown one answers with the list. Use get_recipe."""
+    """Browse the stores' recipes and return their links. With no tags or category, return this
+    week's featured recipes (nemlig's upstream label is "Ugens udvalgte"). With `tags`, return
+    recipes matching every tag. The upstream nemlig tags are Danish labels such as "Familievenlig",
+    "Budgetvenlig", "Under 30 min" and "Kylling"; pass those exact labels to the store.
+    `category` is an upstream category path; nemlig defaults to "aftensmad". BilkaToGo does not
+    support tags: without `category`, it returns the week's "Madplan" (7 dinners); with a category,
+    it accepts paths such as "aftensmad/pastaretter". These Danish values are API labels, not
+    translated display text. Use get_recipe for recipe details."""
     limit = max(1, min(limit, MAX_RESULTS))
     if not tags and not category:
         return await _out(await _each(_names(stores), lambda s: s.featured_recipes(limit)))
@@ -217,12 +217,12 @@ async def list_recipes(
 
 @_tool(READ)
 async def list_offers(stores: list[str] | None = None, limit: int = 25) -> dict:
-    """List this week's offers in each store, also items you would not search for: nemlig's
-    Skarp pris, Priskup, Dagstilbud, Undgå madspild and gifts; BilkaToGo's offers; REMA 1000's
-    leaflet (Avisvarer, often with a max per customer in offer_text). `limit` is
-    per list; a product on two lists is shown once. A list the store fails to send is left out
-    (see the server log). Free gifts come from a separate search and are not cut by `limit`.
-    They have price 0 and "max_per_order". Use them when they fit the plan."""
+    """List this week's offers from each store, including products that ordinary product search
+    might miss: nemlig's offer campaigns (upstream labels include "Skarp pris", "Priskup",
+    "Dagstilbud" and "Undgå madspild"), BilkaToGo offers, and the REMA 1000 leaflet
+    (upstream label "Avisvarer"). `limit` applies per list; duplicate products are returned once.
+    A list that a store fails to provide is omitted (see the server log). Free gifts come from
+    a separate search and are not limited by `limit`. They have price 0 and `max_per_order`."""
     limit = max(1, min(limit, MAX_RESULTS))
     return await _out(await _each(_names(stores), lambda s: s.offers(limit)))
 
@@ -237,26 +237,27 @@ async def get_nutrition(store: str, product_ids: list[str]) -> dict:
     ids = list(dict.fromkeys(i.strip() for i in product_ids if i.strip()))  # order kept
     if not ids or len(ids) > MAX_ITEMS:
         raise ToolError(
-            "Ingen vare-id'er angivet." if not ids else f"Højst {MAX_ITEMS} varer pr. kald."
+            "No product IDs provided." if not ids else f"At most {MAX_ITEMS} products per call."
         )
     return await _out({"products": await _call(store, "nutrition", ids)})
 
 
 @_tool(READ)
 async def compare_basket(items: list[str], stores: list[str] | None = None) -> dict:
-    """Price a shopping list in each store, e.g. ["2 x letmælk 1 l", "rugbrød", "æg 10 stk"].
-    Write the amount you need ("fior di latte 300 g"), not a pack size. Returns per item a
-    suggested product and up to 5 "candidates" (the suggestion first, one øko when found) with
-    the cost for the amount and flags: name_match, size_fits, prepared (cold cuts, smoked,
-    breaded), processed (frost/konserves), blend, oeko. The suggestion is a guess by word rules:
-    pick the candidate that fits the user, and ask when "sure" is false or none fits
-    (search_products finds more). Unknown facts and false flags are left out. Also total incl.
-    fees and minimum order met. Only reads: use set_cart_quantities with the chosen ids after."""
+    """Price a shopping list in each store, e.g. ["2 x whole milk 1 l", "rye bread", "eggs 10 pcs"].
+    Specify the amount you need (for example "fior di latte 300 g"), not a package size. Returns
+    a suggested product and up to five candidates per item, with the cost for the requested
+    amount and flags such as `name_match`, `size_fits`, `prepared`, `processed`, `blend` and
+    `oeko`. The suggested match is heuristic: choose the candidate that best fits the request,
+    and ask the human when `sure` is false or no candidate is suitable. `search_products` can
+    find more options. Unknown facts and false flags are omitted. Also returns the total,
+    fees and whether the minimum order is met. This tool only reads; use set_cart_quantities
+    with the chosen product IDs afterwards."""
     items = [i.strip() for i in items if i.strip()]
     if not items:
-        raise ToolError("Indkøbslisten er tom.")
+        raise ToolError("The shopping list is empty.")
     if len(items) > MAX_ITEMS:
-        raise ToolError(f"Højst {MAX_ITEMS} varer pr. liste.")
+        raise ToolError(f"At most {MAX_ITEMS} products per list.")
     quotes = await _each(_names(stores), lambda s: compare.quote(s, items))
     return await _out({"stores": quotes, **compare.verdict(quotes)})
 
@@ -277,12 +278,12 @@ async def get_cart(store: str | None = None) -> dict:
 async def set_cart_quantities(store: str, items: dict[str, Count]) -> dict:
     """Set ABSOLUTE quantities in one store's cart (0 removes the product). Never orders or pays. Returns a result per product and the new cart with its `url`: give the human that link to check and pay. REMA 1000: sets the shopping list "handle-mcp", never another list."""
     if not items:
-        raise ToolError("Ingen varer angivet.")
+        raise ToolError("No products provided.")
     if len(items) > MAX_ITEMS:
-        raise ToolError(f"Højst {MAX_ITEMS} varer pr. kald.")
+        raise ToolError(f"At most {MAX_ITEMS} products per call.")
     bad = [pid for pid, qty in items.items() if not 0 <= qty <= MAX_QUANTITY]
     if bad:
-        raise ToolError(f"Antal skal være 0-{MAX_QUANTITY}. Forkert for: {', '.join(bad)}.")
+        raise ToolError(f"Quantity must be between 0 and {MAX_QUANTITY}. Invalid for: {', '.join(bad)}.")
     if telemetry.locked(store):  # was the counted cart ordered? (telemetry.cart_seen)
         with contextlib.suppress(ToolError):  # counting never blocks a cart change
             await _call(store, "cart")
@@ -315,13 +316,13 @@ async def add_recipe_to_cart(
     except recipe_cart.PlanError as exc:
         raise ToolError(str(exc)) from exc
     if not lines:
-        raise ToolError("Ingen varer at lægge i kurven.")
+        raise ToolError("There are no products to add to the cart.")
     if len(lines) > MAX_ITEMS:
-        raise ToolError(f"Højst {MAX_ITEMS} varer pr. kald.")
+        raise ToolError(f"At most {MAX_ITEMS} products per call.")
     before = recipe_cart.in_cart(await _call(store, "cart"))
     targets = {pid: before.get(pid, 0) + ln["quantity"] for pid, ln in lines.items()}
     if bad := [pid for pid, qty in targets.items() if qty > MAX_QUANTITY]:
-        raise ToolError(f"Højst {MAX_QUANTITY} stk. pr. vare. For mange af: {', '.join(bad)}.")
+        raise ToolError(f"At most {MAX_QUANTITY} units per product. Too many for: {', '.join(bad)}.")
     results = await _call(store, "set_quantities", targets)
     added = recipe_cart.report(lines, before, results)
     cart = await _call(store, "cart", False)
@@ -340,12 +341,13 @@ async def get_delivery_info(store: str) -> dict:
 
 @_tool(READ)
 async def list_delivery_slots(stores: list[str] | None = None, days: int = 7) -> dict:
-    """List free delivery times for the next `days` days with the delivery fee per slot, in time
-    order, plus the 3 cheapest per store. nemlig: "Personlig" (you are home) or "Fleksibel"
-    (left at the door). BilkaToGo: one flat fee, night delivery, or pickup times ("Afhentning")
-    when the cart is set to pickup. REMA 1000: Køb & Hent times in the store chosen at login, no
-    fee. Only reads: it never chooses a time, store or mode. The human chooses on the store's
-    website."""
+    """List available delivery or pickup slots for the next `days` days, sorted by time, plus
+    the three cheapest slots per store. nemlig uses the upstream slot labels "Personlig" and
+    "Fleksibel". BilkaToGo may return pickup slots when the cart is set
+    to pickup. REMA 1000 returns Køb & Hent pickup slots for the store selected at login.
+    These quoted Danish labels are retained because they come from the stores. This tool only
+    reads availability; it never chooses a time, store or delivery mode. The human makes that
+    choice on the store's website."""
     days = max(1, min(days, MAX_DAYS))
     return await _out(await _each(_names(stores), lambda s: _slots(s, days)))
 

@@ -123,7 +123,7 @@ async def test_pickup_only_terms(store):
     terms = await store.terms()
     assert not terms.home_delivery and terms.delivery_mode == "pickup"
     info = await store.delivery_info()
-    assert info.note == NOTE and "pakkegebyr" in NOTE
+    assert info.note == NOTE and "packing fee" in NOTE
 
 
 @pytest.mark.parametrize(
@@ -139,7 +139,7 @@ async def test_compare_says_pickup_and_missing_fee(fake):
     fake.answers["hakket oksekød"] = httpx.Response(200, json=fixture("search_oksekod"))
     store = Rema1000Store(httpx.AsyncClient(transport=httpx.MockTransport(fake.handle)))
     quote = await compare.quote(store, ["hakket oksekød 400 g"])
-    assert quote.notes == [NOTE]  # no "Afhentning i None", no "ikke sat til hjemlevering"
+    assert quote.notes == [NOTE]  # no "Pickup at None", no "not set to home delivery"
     assert quote.delivery_mode == "pickup" and quote.fees == {}
     # "HK." is hakket, and the 35 % grønt blend loses to plain minced beef.
     assert quote.lines[0].product.name == "HK. OKSEKØD 15-18%"
@@ -164,7 +164,7 @@ def test_verdict_says_cheapest_is_pickup():
     result = compare.verdict(
         {"rema1000": quote("rema1000", "pickup", 8), "nemlig": quote("nemlig", "home", 9)}
     )
-    assert result["cheapest"] == "rema1000" and "afhentning" in result["summary"]
+    assert result["cheapest"] == "rema1000" and "pickup" in result["summary"]
 
 
 async def test_offers_skip_ended_offers_and_still_fill_the_limit(fake):

@@ -44,9 +44,9 @@ def test_plan_leaves_out_have_at_home_and_sold_out():
         "106593": 2,
     }
     assert {(s["ingredient"], s["reason"]) for s in skipped} == {
-        ("Iceberg", "udsolgt"),
-        ("Salt", "har du (butikken regner med det)"),
-        ("Olivenolie", "har du (butikken regner med det)"),
+        ("Iceberg", "sold out"),
+        ("Salt", "assumed to be at home (the store assumes you have it)"),
+        ("Olivenolie", "assumed to be at home (the store assumes you have it)"),
     }
 
 
@@ -63,15 +63,15 @@ def test_plan_skip_swap_and_include_by_name_or_id():
         "name": "Hakket 4-7%",
         "quantity": 2,
     }
-    assert ("Agurk", "fravalgt") in {(s["ingredient"], s["reason"]) for s in skipped}
+    assert ("Agurk", "skipped by the user") in {(s["ingredient"], s["reason"]) for s in skipped}
 
 
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"skip": ["Pizza"]}, "har ikke 'Pizza'.*Rødløg"),
-        ({"swap": {"Rødløg": "999"}}, "ikke et alternativ til Rødløg"),
-        ({"include": ["Peber"]}, "har ikke 'Peber'"),
+        ({"skip": ["Pizza"]}, "does not contain 'Pizza'.*Rødløg"),
+        ({"swap": {"Rødløg": "999"}}, "is not an alternative for Rødløg"),
+        ({"include": ["Peber"]}, "does not contain 'Peber'"),
     ],
 )
 def test_plan_unknown_names_are_clear_errors(kwargs, match):
@@ -110,14 +110,14 @@ async def test_tool_twice_adds_twice(kebab_store):
 
 async def test_tool_bad_skip_writes_nothing(kebab_store):
     before = await server.get_cart("fake")
-    with pytest.raises(ToolError, match="har ikke 'Pizza'"):
+    with pytest.raises(ToolError, match="does not contain 'Pizza'"):
         await server.add_recipe_to_cart("fake", "kebabfad-98001303", skip=["Pizza"])
     assert await server.get_cart("fake") == before
 
 
 async def test_tool_respects_the_quantity_limit(kebab_store):
     await server.set_cart_quantities("fake", {"5026536": server.MAX_QUANTITY})
-    with pytest.raises(ToolError, match="Højst"):
+    with pytest.raises(ToolError, match="At most"):
         await server.add_recipe_to_cart("fake", "kebabfad-98001303")
 
 
@@ -168,7 +168,7 @@ def test_plan_swap_to_a_sold_out_alternative_is_skipped():
         }
     )
     lines, skipped = plan(sold_out, swap={"Hakket": "2"})
-    assert not lines and skipped[0]["reason"] == "udsolgt"
+    assert not lines and skipped[0]["reason"] == "sold out"
 
 
 async def test_tool_only_have_at_home_is_a_clear_error(monkeypatch):
@@ -178,5 +178,5 @@ async def test_tool_only_have_at_home_is_a_clear_error(monkeypatch):
         return home
 
     monkeypatch.setattr(FakeStore, "recipe", recipe)
-    with pytest.raises(ToolError, match="Ingen varer"):
+    with pytest.raises(ToolError, match="no products"):
         await server.add_recipe_to_cart("fake", "r")

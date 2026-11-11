@@ -54,11 +54,11 @@ class Unsure(StoreError):
 
 
 def queue() -> StoreError:
-    return StoreError("REMA 1000 har kø eller et bot-tjek lige nu. Prøv igen senere.")
+    return StoreError("REMA 1000 currently has a queue or bot check. Try again later.")
 
 
 def changed() -> StoreError:
-    return StoreError("REMA 1000 sendte login et uventet sted hen. API'et kan have ændret sig.")
+    return StoreError("REMA 1000 redirected the login unexpectedly. Its API may have changed.")
 
 
 def claims(token: str) -> dict:
@@ -169,12 +169,12 @@ class RemaAuthMixin:
                 f"{SHOP}/api/auth/refresh", headers=headers, follow_redirects=False
             )
         except httpx.HTTPError as exc:
-            raise StoreError(f"Kan ikke nå {NAME} ({type(exc).__name__}).") from exc
+            raise StoreError(f"Could not reach {NAME} ({type(exc).__name__}).") from exc
         self._auth.cookies.clear()  # the cookies live in self._cookies, nowhere else
         log.info("REMA 1000 renewal answered %s", resp.status_code)
         if resp.status_code >= 500 and complete:
             raise StoreError(
-                f"REMA 1000 svarer {resp.status_code} ved fornyelse. Prøv igen senere."
+                f"REMA 1000 returned HTTP {resp.status_code} during session renewal. Try again later."
             )
         if resp.status_code >= 300:
             return False
@@ -197,7 +197,7 @@ class RemaAuthMixin:
         self._auth.cookies.clear()
         page = await self._follow(f"{SHOP}/konto/auth?redirect_uri=%2Fkonto", lambda u: False)
         if page.status_code != 200 or page.url.host != LOGIN_HOST:
-            raise StoreError("REMA 1000: loginsiden blev ikke nået. API'et kan have ændret sig.")
+            raise StoreError("REMA 1000: the login page could not be reached. Its API may have changed.")
         headers = HEADERS | {
             "X-Language": "da",
             "Origin": f"https://{LOGIN_HOST}",
@@ -214,18 +214,18 @@ class RemaAuthMixin:
         )
         status = resp.status_code
         if status in (400, 401, 422):
-            raise StoreError("REMA 1000 afviser login. Tjek email og kodeord.")
+            raise StoreError("REMA 1000 rejected the login. Check your email and password.")
         if status == 403 or 300 <= status < 400:
             raise queue()
         if status >= 300:
-            raise StoreError(f"REMA 1000 login fejlede ({status}).")
+            raise StoreError(f"REMA 1000 login failed ({status}).")
         try:
             body = resp.json()
         except ValueError:
             body = None
         nxt = body.get("redirect_uri") if isinstance(body, dict) else None
         if not isinstance(nxt, str) or not nxt:
-            raise StoreError("REMA 1000 login svarede uden videre sti. API'et kan have ændret sig.")
+            raise StoreError("REMA 1000 login returned no redirect path. Its API may have changed.")
         if nxt.startswith("http://"):
             nxt = "https://" + nxt.removeprefix("http://")
         # Stop once the callback has answered: it sets the cookies; the rest is the webshop.
@@ -233,7 +233,7 @@ class RemaAuthMixin:
         cookies = {c.name: c.value for c in self._auth.cookies.jar if c.name in KEPT}
         self._auth.cookies.clear()
         if not cookies.get("access_token"):
-            raise StoreError("REMA 1000 login gav ingen adgangsnøgle. API'et kan have ændret sig.")
+            raise StoreError("REMA 1000 login returned no access token. Its API may have changed.")
         self._set(cookies)
         log.info("logged in to REMA 1000")
         save_session(self.name, email, self.session() or {})  # replaces an old saved password
@@ -260,10 +260,10 @@ class RemaAuthMixin:
             where = resp.headers.get("location")
             if stop(u) or not 300 <= resp.status_code < 400 or not where:
                 if resp.status_code >= 400:
-                    raise StoreError(f"REMA 1000 login fejlede ({resp.status_code}).")
+                    raise StoreError(f"REMA 1000 login failed ({resp.status_code}).")
                 return resp
             url = str(u.join(where))
-        raise StoreError("REMA 1000 login gik i ring. API'et kan have ændret sig.")
+        raise StoreError("REMA 1000 login entered a redirect loop. Its API may have changed.")
 
     async def _api(
         self,
@@ -293,11 +293,11 @@ class RemaAuthMixin:
                 try:
                     resp = await self._client.request(method, url, **kwargs)
                 except RETRYABLE as exc:
-                    raise Unsure(f"{NAME} svarer ikke ({type(exc).__name__}).") from exc
+                    raise Unsure(f"{NAME} is not responding ({type(exc).__name__}).") from exc
                 except httpx.HTTPError as exc:
-                    raise StoreError(f"Kan ikke nå {NAME} ({type(exc).__name__}).") from exc
+                    raise StoreError(f"Could not reach {NAME} ({type(exc).__name__}).") from exc
                 if resp.status_code == 429 or resp.status_code >= 500:
-                    raise Unsure(f"{NAME} svarer {resp.status_code}.")
+                    raise Unsure(f"{NAME} returned HTTP {resp.status_code}.")
             else:
                 resp = await request(self._client, method, url, NAME, **kwargs)
             status = resp.status_code
@@ -314,13 +314,13 @@ class RemaAuthMixin:
     async def _api_json(self, path: str, what: str, params: dict | None = None) -> dict:
         resp = await self._api("GET", path, params=params)
         if resp.status_code != 200:
-            raise StoreError(f"REMA 1000 afviste {what} ({resp.status_code}).")
+            raise StoreError(f"REMA 1000 rejected {what} ({resp.status_code}).")
         try:
             data = resp.json()
         except ValueError:
             data = None
         if not isinstance(data, dict):
             raise StoreError(
-                f"REMA 1000 svarede med noget uventet ({what}). API'et kan have ændret sig."
+                f"REMA 1000 returned an unexpected response ({what}). Its API may have changed."
             )
         return data

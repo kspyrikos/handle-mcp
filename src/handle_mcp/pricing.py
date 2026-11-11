@@ -69,7 +69,7 @@ def multi_hint(product: Any, count: int, on: date | None) -> str | None:
     extra = cost(product, full, on) - cost(product, count, on)
     if extra >= _price(product, on):
         return None
-    return f"Tilbud {get(product, 'offer_text')}: {full - count} mere for {extra} kr."
+    return f"Offer {get(product, 'offer_text')}: {full - count} more for {extra} DKK."
 
 
 def per_unit(product: Any, quantity: int, count: int, on: date | None) -> tuple[int, Decimal]:

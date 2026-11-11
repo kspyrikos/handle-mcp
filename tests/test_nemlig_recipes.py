@@ -47,7 +47,7 @@ async def test_recipe_sends_slug_and_persons(store, fake):
 
 @pytest.mark.parametrize("bad", ["kebab%2f..", "kebab fad", ""])
 def test_recipe_id_must_be_a_slug(bad):
-    with pytest.raises(StoreError, match="Kender ikke opskriften"):
+    with pytest.raises(StoreError, match="Unknown recipe"):
         recipe_slug(bad)
 
 
@@ -56,7 +56,7 @@ async def test_recipe_format_change_is_a_clear_error(store, monkeypatch):
         return {}
 
     monkeypatch.setattr(store, "_api", empty)
-    with pytest.raises(StoreError, match="ændret format"):
+    with pytest.raises(StoreError, match="has changed format"):
         await store.recipe(KEBAB)
 
 
@@ -70,7 +70,7 @@ async def test_featured_recipes_are_grouped(store):
 
 async def test_queued_recipe_api_is_a_clear_error(store, fake):
     fake.api_queue = True
-    with pytest.raises(StoreError, match="kø"):
+    with pytest.raises(StoreError, match="queue"):
         await store.featured_recipes()
 
 
@@ -177,7 +177,7 @@ async def test_recipes_by_tag_in_a_category(store, fake):
 
 
 async def test_unknown_tag_lists_the_known_ones(store):
-    with pytest.raises(StoreError, match="kender ikke tagget 'Pizza'.*Familievenlig"):
+    with pytest.raises(StoreError, match="does not recognize tag 'Pizza'.*Familievenlig"):
         await store.recipes_by_tag(["Pizza"])
 
 
@@ -218,7 +218,7 @@ async def test_recipe_search_format_change_is_a_clear_error(store, monkeypatch):
 
     monkeypatch.setattr(store, "_api", empty)
     monkeypatch.setattr(store, "_timeslot_id", _no_slot)
-    with pytest.raises(StoreError, match="ændret format"):
+    with pytest.raises(StoreError, match="has changed format"):
         await store.recipes("karry")
 
 
@@ -229,7 +229,7 @@ async def _no_slot():
 def test_category_with_spaces_and_danish_letters():
     assert category_path("Mad til flere dage") == "mad-til-flere-dage"
     assert category_path("Måltidskasse") == "maaltidskasse"
-    with pytest.raises(StoreError, match="Kender ikke kategorien"):
+    with pytest.raises(StoreError, match="Unknown category"):
         category_path("aftens/mad")
 
 
@@ -238,5 +238,5 @@ async def test_no_tags_from_nemlig_is_a_format_change(store, monkeypatch):
         return {"filters": []}
 
     monkeypatch.setattr(store, "_api", api)
-    with pytest.raises(StoreError, match="ændret format"):
+    with pytest.raises(StoreError, match="has changed format"):
         await store.recipes_by_tag(["Familievenlig"])

@@ -92,7 +92,7 @@ def keychain_get(store: str) -> dict | None:
     except ValueError:
         login = None
     if login is None:
-        raise StoreError(f"Ugyldigt login i nøgleringen. Kør: handle-mcp login {store}")
+        raise StoreError(f"Invalid login in the keychain. Run: handle-mcp login {store}")
     return login
 
 
@@ -165,19 +165,19 @@ def load_login(store: str) -> dict:
     path = CONFIG_DIR / f"{store}.json"
     if not path.exists():
         raise StoreError(
-            f"Intet login til {store}. Kør i en terminal: handle-mcp login {store}. "
-            f"Uden terminal: sæt HANDLE_{store.upper()}_EMAIL og _PASSWORD, "
-            f"og kør: handle-mcp login {store} --from-env"
+            f"No login saved for {store}. Run in a terminal: handle-mcp login {store}. "
+            f"Without a terminal, set HANDLE_{store.upper()}_EMAIL and _PASSWORD, "
+            f"then run: handle-mcp login {store} --from-env"
         )
     # Windows has no mode bits (always 0o666); the user profile's ACL keeps the file private.
     if os.name != "nt" and path.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-        raise StoreError(f"{path} kan læses af andre. Kør: chmod 600 {path}")
+        raise StoreError(f"Other users can read {path}. Run: chmod 600 {path}")
     try:
         login = _parse(json.loads(path.read_text(encoding="utf-8")))
     except ValueError:
         login = None
     if login is None:
-        raise StoreError(f"{path} er ugyldig. Kør: handle-mcp login {store} --from-env")
+        raise StoreError(f"{path} is invalid. Run: handle-mcp login {store} --from-env")
     return login
 
 
@@ -196,7 +196,7 @@ def save_session(store: str, email: str, session: dict[str, str]) -> None:
 
 
 def expired(store: str) -> StoreError:
-    return StoreError(f"Login til {store} er udløbet. Kør i en terminal: handle-mcp login {store}")
+    return StoreError(f"The login for {store} has expired. Run in a terminal: handle-mcp login {store}")
 
 
 from handle_mcp.stores.bilkatogo import BilkaStore

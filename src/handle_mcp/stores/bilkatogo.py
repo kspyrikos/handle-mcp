@@ -57,8 +57,8 @@ STATUS = {  # Bilka's codes → the words the website shows
     "Annulleret": "Annulleret",
 }
 UNKNOWN_MODE = (
-    "BilkaToGo viser ikke, om kurven er sat til hjemlevering eller afhentning. "
-    "Vælg det på bilkatogo.dk."
+    "BilkaToGo does not indicate whether the cart is set to home delivery or pickup. "
+    "Choose this on bilkatogo.dk."
 )
 
 
@@ -69,14 +69,14 @@ def _kr(ore: Any) -> Decimal:
     try:
         return Decimal(str(ore or 0)).scaleb(-2)
     except (InvalidOperation, ValueError) as exc:
-        raise StoreError(f"BilkaToGo sendte et ukendt beløb: {ore!r}.") from exc
+        raise StoreError(f"BilkaToGo returned an unknown amount: {ore!r}.") from exc
 
 
 def _campaign(offer: str | None) -> str | None:
     """'Skarp pris' stays, 'Mix 10 for 25,00' is 'Mix', leaflet offers are 'Tilbud'."""
     if not offer:
         return None
-    return offer if offer == "Skarp pris" else "Mix" if offer.startswith("Mix ") else "Tilbud"
+    return offer if offer == "Skarp pris" else "Mix" if offer.startswith("Mix ") else "Offer"
 
 
 def _today() -> date:
@@ -168,19 +168,19 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
         except ValueError:
             data = None
         if not isinstance(data, dict):
-            raise StoreError(f"BilkaToGo ({what}) svarede uventet. API'et kan have ændret sig.")
+            raise StoreError(f"BilkaToGo ({what}) returned an unexpected response. Its API may have changed.")
         return data
 
     async def _gigya(self, method: str, form: dict[str, str]) -> dict:
         data = self._json(await self._send("POST", f"{GIGYA}/{method}", data=form), method)
         if data.get("errorCode") == GIGYA_BAD_LOGIN:
-            raise _GigyaRefused("BilkaToGo afviser login. Tjek email og kodeord.")
+            raise _GigyaRefused("BilkaToGo rejected the login. Check your email and password.")
         code = data.get("errorCode", 0)
         if code == GIGYA_RATE_LIMIT or (isinstance(code, int) and code >= 500000):
-            raise StoreError("BilkaToGo-login svarer ikke lige nu. Prøv igen om lidt.")
+            raise StoreError("BilkaToGo login is temporarily unavailable. Try again shortly.")
         if code != 0:
             raise _GigyaRefused(
-                f"BilkaToGo login fejlede: {data.get('errorMessage', data['errorCode'])}"
+                f"BilkaToGo login failed: {data.get('errorMessage', data['errorCode'])}"
             )
         return data
 
@@ -201,14 +201,14 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
             token = (session or {}).get("cookieValue")
             jwt = await self._jwt_for(token) if token else None
         if not token or not jwt:
-            raise StoreError("BilkaToGo login svarede uden token. API'et kan have ændret sig.")
+            raise StoreError("BilkaToGo login returned no token. Its API may have changed.")
         # Never send the `cart` cookie: LoginJWT would REPLACE the account's cart with it.
         self._client.cookies.delete("cart")
         resp = await self._send(
             "POST", f"{API}/auth/LoginJWT", params={"u": "w"}, headers={"jwt_token": jwt}
         )
         if resp.status_code != 200:
-            raise StoreError(f"BilkaToGo login fejlede ({resp.status_code}).")
+            raise StoreError(f"BilkaToGo login failed ({resp.status_code}).")
         self._jwt, self._token = jwt, token
         self._jwt_until = datetime.now(TZ) + timedelta(seconds=JWT_SECONDS - 300)
         log.info("logged in to BilkaToGo")
@@ -239,14 +239,14 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
             if resp.status_code == 401:
                 continue
             if resp.status_code >= 400:
-                raise StoreError(f"BilkaToGo afviste {path} ({resp.status_code}).")
+                raise StoreError(f"BilkaToGo rejected {path} ({resp.status_code}).")
             data = self._json(resp, path)
-            if data.get("code") == 1:  # {"code": 1, "msg": "Du er ikke logget ind"}
+            if data.get("code") == 1:  # {"code": 1, "msg": "You are not logged in"}
                 continue
             if "msg" in data and "code" in data:
                 raise _Refused(data["msg"])
             return data
-        raise StoreError("BilkaToGo afviser en frisk session. Tjek login.")
+        raise StoreError("BilkaToGo rejected a fresh session. Check your login.")
 
     async def _cart_json(self) -> dict:
         return await self._shop("GET", "shop/v6/Cart", {"extra": "deliveryAddress,deliveryDate"})
@@ -264,14 +264,14 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
         """Search, offers, or `ids`: the products with those Bilka item numbers (recipes)."""
         if not has_login(self.name):  # the assortment, prices and offers follow the address
             raise StoreError(
-                "BilkaToGo viser priser og tilbud for butikken bag din leveringsadresse, "
-                "så et login skal til. Kør: handle-mcp login bilkatogo"
+                "BilkaToGo shows prices and offers for the store associated with your delivery address, "
+                "so a login is required. Run: handle-mcp login bilkatogo"
             )
         address = (await self._cart_json()).get("deliveryAddress") or {}
         sid = str(address.get("sid") or "")
         if not sid:
             raise StoreError(
-                "Ingen adresse valgt i BilkaToGo. Vælg hjemlevering eller afhentning på bilkatogo.dk."
+                "No delivery address is selected in BilkaToGo. Choose home delivery or pickup on bilkatogo.dk."
             )
         filters = f"isInAssortmentIn:{sid} AND nonsearchable:false"
         if offers:  # isInOffer is a list of store ids, not true/false
@@ -302,13 +302,13 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
         )
         body = {"requests": [{"indexName": ALGOLIA_INDEX, "params": params}]}
         resp = await self._send("POST", ALGOLIA, headers=ALGOLIA_HEADERS, json=body)
-        what = "tilbud" if offers else "søgning"
+        what = "offers" if offers else "search"
         if resp.status_code != 200:
-            raise StoreError(f"BilkaToGo-{what} fejlede ({resp.status_code}).")
+            raise StoreError(f"BilkaToGo {what} failed ({resp.status_code}).")
         try:
             hits = self._json(resp, what)["results"][0]["hits"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise StoreError(f"BilkaToGo-{what} har ændret format.") from exc
+            raise StoreError(f"BilkaToGo-{what} response format has changed.") from exc
         return [p for p in (self._product(h, sid) for h in hits) if p]
 
     def _product(self, hit: dict, sid: str) -> Product | None:
@@ -320,7 +320,7 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
         before = normal if normal > now else None
         offer = store.get("offerDescription") or None
         if offer in GENERIC_OFFERS:  # a leaflet offer with no text of its own
-            offer = f"Tilbud, før {before:.2f} kr".replace(".", ",") if before else "Tilbud"
+            offer = f"Offer, was {before:.2f} DKK".replace(".", ",") if before else "Offer"
         shown = store.get(
             "unitsOfMeasureShowPrice"
         )  # with the offer; unitsOfMeasurePrice is without
@@ -406,7 +406,7 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
             )
             ok = applied == qty
             if not ok:
-                note = note or f"BilkaToGo satte antallet til {applied}, ikke {qty}."
+                note = note or f"BilkaToGo set the quantity to {applied}, not {qty}."
             results.append(
                 QuantityResult(pid, qty, applied if isinstance(applied, int) else None, ok, note)
             )
@@ -459,7 +459,7 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
             raise StoreError(UNKNOWN_MODE)
         fee, pickup = self._fee(cart, parsed), parsed.delivery_mode == "pickup"
         unknown = (
-            "" if fee is not None else "Gebyret er ukendt: kurven viser det ikke (tom kurv?). "
+            "" if fee is not None else "The fee is unknown: it is not shown in the cart (empty cart?). "
         )
         last = _today() + timedelta(days=days - 1)  # `days` calendar days, today included
         slots = []
@@ -477,7 +477,7 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
                         price=fee,
                         available=not iv.get("closed")
                         and bool(1 & (iv.get("availability_bit") or 0)),
-                        kind="Afhentning" if pickup else "Nat" if start.hour < 6 else None,
+                        kind="Pickup" if pickup else "Night" if start.hour < 6 else None,
                         note=(unknown + re.sub(r"<[^>]+>", "", info)).strip() or None,
                     )
                 )
@@ -515,5 +515,5 @@ class BilkaStore(BilkaRecipesMixin, BilkaNutritionMixin):
             "order"
         )
         if not details:
-            raise StoreError(f"Fandt ikke ordre {order_id} hos BilkaToGo.")
+            raise StoreError(f"Order {order_id} was not found at BilkaToGo.")
         return self._order(details, _lines(details.get("lines")))

@@ -57,7 +57,7 @@ NEMLIG = [
     p("nemlig", "n12", "Pasta penne", "14.00", "500 g"),
     p("nemlig", "n13", "Havregryn", "16.00", "1 kg"),
     p("nemlig", "n14", "Kaffe formalet", "45.00", "500 g"),  # only 500 g
-    p("nemlig", "n15", "Toiletpapir 8 ruller", "39.00", "8 stk"),
+    p("nemlig", "n15", "Toiletpapir 8 ruller", "39.00", "8 items"),
     p("nemlig", "n16", "Skyr vanilje", "30.00", "1 kg"),
 ]
 BILKA = [
@@ -75,7 +75,7 @@ BILKA = [
     p("bilkatogo", "b12", "Pasta fusilli", "12.00", "500 g"),
     p("bilkatogo", "b13", "Havregryn", "15.00", "1 kg"),
     p("bilkatogo", "b14", "Kaffe", "42.00", "400 g"),
-    p("bilkatogo", "b15", "Toiletpapir", "35.00", "8 stk", available=False),  # sold out
+    p("bilkatogo", "b15", "Toiletpapir", "35.00", "8 items", available=False),  # sold out
     p("bilkatogo", "b16", "Skyr naturel", "28.00", "1 kg"),
 ]
 
@@ -171,12 +171,12 @@ def test_right_size_beats_cheaper_wrong_size():
 def test_wrong_size_is_kept_but_marked():
     line = best_match("kaffe 400 g", NEMLIG)
     assert line.product.id == "n14" and not line.sure
-    assert "Anden størrelse" in line.note
+    assert "Different package size" in line.note
 
 
 def test_sold_out_is_missing():
     line = best_match("toiletpapir", [BILKA[14]])  # the only hit is sold out
-    assert line.product is None and line.note == "Ikke fundet"
+    assert line.product is None and line.note == "Not found"
 
 
 async def test_week_list_in_both_stores(two_stores):
@@ -200,7 +200,7 @@ async def test_week_list_in_both_stores(two_stores):
     # Compared on the 14 items both stores have, plus fees.
     assert result["comparable_totals"] == {"nemlig": "409.80", "bilkatogo": "412.50"}
     assert result["cheapest"] == "nemlig"  # Bilka is cheaper on goods but has higher fees
-    assert "Tjek dem" in result["summary"]
+    assert "Check them" in result["summary"]
 
 
 async def test_one_broken_store_does_not_stop_the_compare(monkeypatch):
@@ -210,14 +210,14 @@ async def test_one_broken_store_does_not_stop_the_compare(monkeypatch):
     result = await server.compare_basket(["rugbrød"])
     assert "500" in result["stores"]["broken"]["error"]
     assert result["cheapest"] == "nemlig"  # 22 + 35 kr. fees beats 18 + 78 kr.
-    assert "Fejl: broken." in result["summary"]
+    assert "Error: broken." in result["summary"]
 
 
 async def test_no_winner_when_only_one_store_answers(monkeypatch):
     monkeypatch.setattr(registry, "STORES", {"nemlig": Nemlig, "broken": BrokenCatalog})
     result = await server.compare_basket(["rugbrød"])
     assert result["cheapest"] is None
-    assert result["summary"] == "Kun nemlig kunne prise listen. Fejl: broken."
+    assert result["summary"] == "Only nemlig could price the list. Error: broken."
 
 
 class BrokenCatalog(CatalogStore):
@@ -231,7 +231,7 @@ async def test_not_home_delivery_is_noted(monkeypatch):
 
     monkeypatch.setattr(registry, "STORES", {"bilkatogo": Pickup})
     result = await server.compare_basket(["rugbrød"])
-    assert result["stores"]["bilkatogo"]["notes"] == ["Kurven er ikke sat til hjemlevering."]
+    assert result["stores"]["bilkatogo"]["notes"] == ["The cart is not set to home delivery."]
 
 
 async def test_pickup_is_noted(monkeypatch):
@@ -240,7 +240,7 @@ async def test_pickup_is_noted(monkeypatch):
 
     monkeypatch.setattr(registry, "STORES", {"bilkatogo": Pickup})
     quote = (await server.compare_basket(["rugbrød"]))["stores"]["bilkatogo"]
-    assert quote["notes"] == ["Afhentning i Bilka Vejle: du henter selv varerne."]
+    assert quote["notes"] == ["Pickup at Bilka Vejle: you collect the products yourself."]
     assert (quote["delivery_mode"], quote["pickup_store"]) == ("pickup", "Bilka Vejle")
 
 
@@ -258,9 +258,9 @@ async def test_pickup_without_store_adds_no_store_note(monkeypatch):
 async def test_empty_or_too_long_list_is_refused(two_stores):
     from mcp.server.mcpserver.exceptions import ToolError
 
-    with pytest.raises(ToolError, match="tom"):
+    with pytest.raises(ToolError, match="shopping list is empty"):
         await server.compare_basket([" ", ""])
-    with pytest.raises(ToolError, match="Højst"):
+    with pytest.raises(ToolError, match="At most"):
         await server.compare_basket(["mælk"] * (server.MAX_ITEMS + 1))
 
 
@@ -300,7 +300,7 @@ async def test_failing_delivery_info_keeps_the_prices(monkeypatch):
     result = await server.compare_basket(["rugbrød"])
     assert result["stores"]["nemlig"]["lines"][0]["product"]["id"] == "n3"
     assert result["stores"]["nemlig"]["notes"] == [
-        "Under minimumskøb: 278.00 kr. mangler til 300 kr."
+        "Below the minimum order: 278.00 DKK remaining to reach 300 kr."
     ]
 
 
@@ -314,7 +314,7 @@ def test_store_top_hit_when_no_name_matches():
     sold_out = p("x", "s", "Spaghetti", "9.00", "500 g", available=False)
     line = best_match("pasta 500 g", [sold_out, p("x", "pe", "Penne rigate", "12.00", "500 g")])
     assert line.product.id == "pe" and not line.sure
-    assert "bedste søgeresultat" in line.note
+    assert "best search result" in line.note
 
 
 def test_guesses_stay_out_of_the_verdict():
@@ -370,7 +370,7 @@ def test_rolls_are_not_wet_wipes():
     wipes = p("x", "w", "Aloe Vera fugtigt toiletpapir", "22.95", "42 stk.")
     rolls = p("x", "r", "Classic toiletpapir", "32.00", "12 rl.")
     assert best_match("toiletpapir 8 ruller", [wipes, rolls]).product.id == "r"
-    nemlig = p("x", "n", "Toiletpapir 8 ruller", "39.00", "8 stk")
+    nemlig = p("x", "n", "Toiletpapir 8 ruller", "39.00", "8 items")
     assert pack_size(nemlig) == ("rl", 8)
     # '8 stk' still finds rolls: only the other way round is closed.
     eight = p("x", "8", "Toiletpapir 3-lags", "28.00", "8 rl.")
@@ -406,7 +406,7 @@ def test_candidates_show_the_category():
 def test_flavour_only_hit_is_never_a_guess():
     """Seen live: nemlig 'mandariner' matched 'Grøn te m. mandarin & appelsin'."""
     line = best_match("mandariner 1 kg", [p("x", "t", "Grøn te m. mandarin & appelsin", "31.50")])
-    assert line.product is None and line.note == "Ikke fundet"
+    assert line.product is None and line.note == "Not found"
 
 
 def test_store_category_breaks_a_tie_on_the_name():
@@ -454,7 +454,7 @@ def test_relaxed_search_hit_is_marked_unsure():
     """Bilka retries with optional words: 'cheasy skyr passionsfrugt' can return another flavour."""
     other = p("x", "s", "Skyr m. skovbær 0,2%", "30.95", "1 kg", brand="Cheasy")
     line = best_match("4 x cheasy skyr passionsfrugt", [other])
-    assert line.product.id == "s" and not line.sure and "Tjek varen" in line.note
+    assert line.product.id == "s" and not line.sure and "Check the product" in line.note
 
 
 def test_relaxed_search_hit_without_brand_is_only_a_guess():
@@ -496,7 +496,7 @@ def test_compound_word_counts_but_whole_word_wins():
 
 def test_much_bigger_pack_is_marked():
     line = best_match("kaffe 400 g", [p("x", "k", "Kaffe", "45.00", "500 g")])
-    assert not line.sure and "Anden størrelse" in line.note
+    assert not line.sure and "Different package size" in line.note
 
 
 def test_whole_word_beats_cheaper_compound_word():
@@ -523,7 +523,7 @@ def test_offer_that_ends_before_delivery_does_not_count():
     salmon = p("x", "s", "Laksefilet", "84.53", "600 g")
     salmon.before_price, salmon.offer_until = Decimal("120.75"), date(2026, 11, 4)
     line = best_match("laksefilet 600 g", [salmon], on=date(2026, 11, 9))
-    assert line.line_total == Decimal("120.75") and "slutter 04/11" in line.note
+    assert line.line_total == Decimal("120.75") and "offer ends on 04/11" in line.note
     assert best_match("laksefilet 600 g", [salmon], on=date(2026, 11, 3)).line_total == Decimal(
         "84.53"
     )
@@ -631,7 +631,7 @@ def test_blend_loses_to_plain_and_is_not_sure():
     plain = p("x", "o", "Hakket oksekød 14-18%", "47.44", "500 g")
     assert best_match("hakket oksekød 500 g", [blend, plain]).product.id == "o"
     only = best_match("hakket oksekød 500 g", [blend])
-    assert not only.sure and "Blandingsvare" in only.note
+    assert not only.sure and "Mixed product" in only.note
     assert best_match("rugbrød", [p("x", "r", "Rugbrød m. kerner", "22.00", "1 kg")]).sure
 
 
@@ -640,7 +640,7 @@ def test_no_size_compares_per_kg_not_per_pack():
     one = p("x", "1", "Æbler", "2.75", "1 stk")
     bag = p("x", "b", "Æbler", "12.00", "1 kg")
     line = best_match("æbler", [one, bag])
-    assert line.product.id == "b" and "Skriv en mængde" in line.note
+    assert line.product.id == "b" and "Specify an amount" in line.note
     six = p("x", "6", "Toiletpapir", "20.00", "6 rl.")
     eight = p("x", "8", "Toiletpapir", "15.22", "8 rl.")
     assert best_match("toiletpapir", [six, eight]).product.id == "8"
@@ -758,7 +758,7 @@ def test_multi_buy_for_the_amount_needed_and_a_hint():
     eco.offer_text = "3 for 48 kr"
     line = best_match("fior di latte 200 g", [eco])
     assert (line.quantity, line.line_total) == (2, Decimal(44))  # never more than needed
-    assert "1 mere for 4.00 kr" in line.note
+    assert "1 more for 4.00 DKK" in line.note
 
 
 def test_oeko_is_a_whole_word():
@@ -788,7 +788,7 @@ def test_pieces_pick_the_cheapest_for_the_count():
 def test_pieces_say_when_packs_give_more():
     four = p("x", "four", "Bananer", "8.00", "4 stk")
     line = best_match("6 x bananer", [four])
-    assert line.quantity == 2 and "8 stk" in line.note
+    assert line.quantity == 2 and "8 items" in line.note
 
 
 def test_candidates_have_a_price_and_lines_say_oeko():
@@ -876,14 +876,14 @@ def test_two_broccoli_compares_a_pack_with_one_piece():
     piece.category = pack.category = "Grønt"
     line = best_match("2 x broccoli", [piece, pack])
     assert (line.product.id, line.quantity, line.line_total) == ("g", 2, Decimal(30))
-    assert "billigst 2 pakker" in line.note
+    assert "cheapest option is 2 packs" in line.note
 
 
 def test_two_milk_still_compares_per_litre():
     small = p("x", "s", "Letmælk", "8.00", "500 ml")
     big = p("x", "b", "Letmælk", "12.00", "1 l")
     line = best_match("2 x letmælk", [small, big])
-    assert line.product.id == "b" and "pr. kg, l eller stk" in line.note
+    assert line.product.id == "b" and "per kg, litre or item" in line.note
 
 
 def test_without_a_fresh_hit_canned_is_not_demoted():

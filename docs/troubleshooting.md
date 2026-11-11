@@ -1,11 +1,11 @@
 # Troubleshooting
 
-Errors from a store come back to the agent as one short Danish line, e.g. `nemlig: ...`. One store failing never stops the others.
+Store errors are returned to the agent as a short English message. One store failing never stops the others.
 
 | Message | Fix |
 |---|---|
-| `Intet login til <store>` | Run `handle-mcp login <store>` in a terminal. |
-| `afviser login. Tjek email og kodeord.` | Wrong email or password. Run `handle-mcp login <store>` again. |
-| `nemlig.com har kø lige nu (queue-it)` | nemlig has a queue. Try again in a few minutes. |
-| `Kurven er sat til afhentning` (BilkaToGo) | Choose home delivery (not pickup) once on bilkatogo.dk. |
-| `uventet fejl (...)` | The store's API may have changed. The log on stderr has the details. Please open an issue. |
+| `No login saved for <store>` | Run `handle-mcp login <store>` in a terminal. |
+| `Login was rejected. Check your email and password.` | Check your credentials and run `handle-mcp login <store>` again. |
+| `nemlig.com currently has a queue (queue-it)` | nemlig.com has a queue. Try again in a few minutes. |
+| `The cart is set to pickup` (BilkaToGo) | Choose home delivery (not pickup) once on bilkatogo.dk. |
+| `unexpected error (...)` | The store's API may have changed. The log on stderr has the details. Please open an issue. |

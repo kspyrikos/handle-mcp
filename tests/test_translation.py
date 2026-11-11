@@ -59,3 +59,13 @@ def test_disabled_translation_returns_original_payload(monkeypatch):
     monkeypatch.setenv("HANDLE_LANGUAGE", "da")
     payload = {"name": "Hakket oksekød", "id": "123"}
     assert translation.translate_payload(payload) is payload
+
+
+def test_store_names_are_never_translated(monkeypatch):
+    monkeypatch.setenv("HANDLE_LANGUAGE", "en")
+    monkeypatch.setattr(translation, "_cached_translate", str.upper)
+
+    text = "BilkaToGo and nemlig.com compared with REMA 1000, Bilka, and Køb & Hent"
+    assert translation.translate_text(text) == (
+        "BilkaToGo AND nemlig.com COMPARED WITH REMA 1000, Bilka, AND Køb & Hent"
+    )

@@ -59,8 +59,8 @@ def run(args: list[str]) -> int:
     args = [a for a in args if a != "--from-env"]
     if len(args) != 2 or args[0] not in ("login", "logout") or args[1] not in registry.STORES:
         _say(
-            "Brug: handle-mcp login <butik> [--from-env]  eller  handle-mcp logout <butik>\n"
-            f"Butikker: {known}"
+            "Usage: handle-mcp login <store> [--from-env] or handle-mcp logout <store>\n"
+            f"Stores: {known}"
         )
         return 2
     command, store = args
@@ -69,38 +69,38 @@ def run(args: list[str]) -> int:
     if from_env:
         return _login_from_env(store)
 
-    _say(f"Log ind på {store}. Brug den email og det kodeord, du bruger på butikkens hjemmeside.")
-    sys.stderr.write(translation.translate_text(f"Email til {store}: "))
+    _say(f"Log in to {store} using the email address and password you use on the store website.")
+    sys.stderr.write(translation.translate_text(f"Email for {store}: "))
     sys.stderr.flush()
     email = sys.stdin.readline().strip()
-    password = getpass.getpass(f"Kodeord til {store} (vises ikke): ")
+    password = getpass.getpass(translation.translate_text(f"Password for {store} (hidden): "))
     if not email or not password:
-        _say("Email og kodeord skal udfyldes. Intet er gemt.")
+        _say("Both email and password are required. Nothing was saved.")
         return 1
     try:  # log in first, save after: a failed login never touches a saved one
         session = _check(store, email, password, choose=True)
     except registry.StoreError as exc:
-        _say(f"Login blev ikke gemt: {exc}\nEt tidligere gemt login er uændret.")
+        _say(f"Login was not saved: {exc}\nAny previously saved login remains unchanged.")
         return 1
     try:
         registry.keychain_set(store, email, session)
     except KeyringError as exc:
-        _say(f"Kunne ikke gemme i nøgleringen: {exc}")
+        _say(f"Could not save to the keychain: {exc}")
         return 1
-    _say(f"Logget ind på {store}. Sessionen er gemt i nøgleringen. Kodeordet er ikke gemt.")
+    _say(f"Logged in to {store}. The session was saved in the keychain. The password was not saved.")
     return 0
 
 
 def _logout(store: str) -> int:
-    removed = ["config-filen"] if registry.config_delete(store) else []
+    removed = ["config file"] if registry.config_delete(store) else []
     try:
         if registry.keychain_delete(store):
-            removed.append("nøgleringen")
+            removed.append("keychain")
     except KeyringError as exc:
         if not removed:
-            _say(f"Ingen nøglering på denne maskine: {exc}")
+            _say(f"No keychain is available on this machine: {exc}")
             return 1
-    _say(f"Login slettet fra {' og '.join(removed)}." if removed else "Der var intet gemt login.")
+    _say(f"Login removed from {' and '.join(removed)}." if removed else "There was no saved login.")
     return 0
 
 
@@ -110,17 +110,17 @@ def _login_from_env(store: str) -> int:
     prefix = f"HANDLE_{store.upper()}_"
     email, password = os.environ.get(prefix + "EMAIL"), os.environ.get(prefix + "PASSWORD")
     if not email or not password:
-        _say(f"Sæt {prefix}EMAIL og {prefix}PASSWORD, og kør igen. Intet er gemt.")
+        _say(f"Set {prefix}EMAIL and {prefix}PASSWORD, then try again. Nothing was saved.")
         return 1
     try:  # log in first, save after: a failed login never touches a saved one
         session = _check(store, email, password)
     except registry.StoreError as exc:
-        _say(f"Login blev ikke gemt: {exc}\nEt tidligere gemt login er uændret.")
+        _say(f"Login was not saved: {exc}\nAny previously saved login remains unchanged.")
         return 1
     path = registry.config_set(store, email, session)
     _say(
-        f"Logget ind på {store}. Sessionen er gemt i {path} (kun du kan læse den). "
-        f"Kodeordet er ikke gemt: fjern {prefix}PASSWORD igen."
+        f"Logged in to {store}. The session was saved to {path} (readable only by you). "
+        f"The password was not saved; remove {prefix}PASSWORD from your environment."
     )
     try:
         shadowed = registry.keychain_get(store) is not None
@@ -128,8 +128,8 @@ def _login_from_env(store: str) -> int:
         shadowed = True
     if shadowed:  # load_login reads the keychain first
         _say(
-            f"OBS: nøgleringen har også et login til {store}, og det vinder over filen. "
-            f"Fjern det med: handle-mcp logout {store}, og kør så --from-env igen."
+            f"WARNING: the keychain also has a login for {store}, and it takes precedence over the file. "
+            f"Remove it with: handle-mcp logout {store}, then run --from-env again."
         )
     return 0
 
@@ -151,20 +151,20 @@ def _numbers(raw: str, most: int) -> list[int]:
 
 async def _choose(instance: Any) -> None:
     """Pick the stores in order of preference. The list is the store's own, shown here only."""
-    _say("Vælg de butikker, du vil bruge, i den rækkefølge du foretrækker dem.")
-    while query := _ask("Søg efter butik (postnummer, by eller navn; tom = spring over): "):
+    _say("Choose the stores you want to use, in your preferred order.")
+    while query := _ask("Search for a store (postcode, city or name; leave blank to skip): "):
         choices = await instance.store_choices(query)
         if not choices:
-            _say("Ingen butikker passer. Prøv en anden søgning.")
+            _say("No stores matched. Try a different search.")
             continue
         for i, (_, text) in enumerate(choices, 1):
             _say(f"{i:>3}. {text}")
-        picked = _numbers(_ask("Skriv numrene, fx 2,1 (tom = søg igen): "), len(choices))
+        picked = _numbers(_ask("Enter the numbers, e.g. 2,1 (leave blank to search again): "), len(choices))
         if picked:
             instance.choose_stores([choices[i - 1][0] for i in picked])
-            _say("Valgt: " + " | ".join(choices[i - 1][1] for i in picked))
+            _say("Selected: " + " | ".join(choices[i - 1][1] for i in picked))
             return
-    _say(f"Ingen butik valgt. Vælg senere med: handle-mcp login {instance.name}")
+    _say(f"No store selected. Choose one later with: handle-mcp login {instance.name}")
 
 
 async def _verify(instance: Any, choose: bool) -> None:
@@ -192,5 +192,5 @@ def _check(store: str, email: str, password: str, choose: bool = False) -> dict[
                 os.environ[k] = v
     session = instance.session()
     if not session:
-        raise registry.StoreError(f"{store} gav ingen session tilbage. API'et kan have ændret sig.")
+        raise registry.StoreError(f"{store} did not return a session. Its API may have changed.")
     return session

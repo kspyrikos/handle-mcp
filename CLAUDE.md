@@ -39,9 +39,12 @@ docs/tools.md      the tool table users read: stores per tool, what writes
 
 ## Language
 
-- Code, comments, docs, commits and PRs: English.
-- Everything a human reads in a tool answer or error: Danish. `StoreError("nemlig.com har kø lige nu.")`.
-- Product names, offer texts and store messages pass through as the store wrote them (after `privacy.scrub()`).
+- Code, comments, documentation, commits and pull requests: English.
+- Human-readable CLI messages, tool descriptions, tool errors and tool responses: English by default.
+- `HANDLE_LANGUAGE=da` is an explicit opt-out for Danish output.
+- Translate store-provided display text locally through `translation.py`; never translate product IDs, EANs, URLs, prices, quantities, units, API identifiers or canonical store identifiers.
+- Preserve official store names exactly: `BilkaToGo`, `nemlig` and `REMA 1000`.
+- Keep Danish API labels and search terms unchanged when they are required to query or interpret a store API. Explain them in English in comments and documentation.
 
 ## Tools
 
@@ -55,7 +58,7 @@ docs/tools.md      the tool table users read: stores per tool, what writes
 ## Add a store
 
 1. Create `src/handle_mcp/stores/<name>.py` with a class that has every method in `stores.Store`.
-2. Raise `StoreError("clear Danish message")` for expected failures. Raise `NotImplementedError` if the store cannot do something.
+2. Raise `StoreError("clear English message")` for expected failures. Raise `NotImplementedError` if the store cannot do something.
 3. Add one line to `STORES` in `stores/__init__.py`.
 4. Tests: fixtures in `tests/fixtures/<name>/` are real answers with personal data replaced. Mock HTTP with `httpx.MockTransport`.
 

@@ -180,7 +180,7 @@ async def test_saved_session_logs_in_without_a_password(store, fake, saved):
 async def test_dead_session_says_log_in_again(store, fake, saved):
     """A dead cookie gives an anonymous basket, not a 401: never shop anonymously."""
     registry.keychain_set("nemlig", "kunde@example.com", {".ASPXAUTH": "old"})
-    with pytest.raises(StoreError, match="udløbet. Kør i en terminal: handle-mcp login nemlig"):
+    with pytest.raises(StoreError, match="has expired. Run in a terminal: handle-mcp login nemlig"):
         await store.get_cart()
     assert "/webapi/login" not in fake.paths()
 
@@ -189,7 +189,7 @@ async def test_session_that_dies_mid_run_never_fills_an_anonymous_basket(store, 
     registry.keychain_set("nemlig", "kunde@example.com", {".ASPXAUTH": "auth-1"})
     await store.get_cart()
     store._client.cookies.clear()  # nemlig drops the login: baskets turn anonymous, no 401
-    with pytest.raises(StoreError, match="udløbet"):
+    with pytest.raises(StoreError, match="expired"):
         await store.set_quantities({"1": 2})
     assert "/webapi/basket/AddToBasket" not in fake.paths()
 
@@ -198,7 +198,7 @@ async def test_session_refused_on_every_call_says_log_in_again(store, fake, save
     registry.keychain_set("nemlig", "kunde@example.com", {".ASPXAUTH": "auth-1"})
     await store.get_cart()
     fake.scripted["/webapi/basket/GetBasket"] = [401, 401, 401]
-    with pytest.raises(StoreError, match="udløbet"):
+    with pytest.raises(StoreError, match="expired"):
         await store.get_cart()
 
 
@@ -224,7 +224,7 @@ async def test_logs_in_only_once(store, fake):
 
 async def test_wrong_password_is_a_clear_error(store, fake, monkeypatch):
     monkeypatch.setenv("HANDLE_NEMLIG_PASSWORD", "forkert")
-    with pytest.raises(StoreError, match="Tjek email og kodeord"):
+    with pytest.raises(StoreError, match="Check your email and password"):
         await store.get_cart()
 
 
@@ -312,11 +312,11 @@ async def test_terms_estimate_bags_for_an_empty_cart(store, fake, monkeypatch):
     fake.basket = {**fake.basket, "TotalBagsPrice": 0}  # products but no bag fee: no guess
     assert (await store.terms()).other_fees == {}
     fake.basket = {**fake.basket, "Lines": [], "TotalBagsPrice": 0}
-    assert (await store.terms()).other_fees == {"poser (anslået)": Decimal("17.85")}
+    assert (await store.terms()).other_fees == {"bags (estimated)": Decimal("17.85")}
     monkeypatch.setenv("HANDLE_NEMLIG_BAG_FEE", "12,50")
-    assert (await store.terms()).other_fees == {"poser (anslået)": Decimal("12.50")}
+    assert (await store.terms()).other_fees == {"bags (estimated)": Decimal("12.50")}
     monkeypatch.setenv("HANDLE_NEMLIG_BAG_FEE", "ikke et tal")
-    assert (await store.terms()).other_fees == {"poser (anslået)": Decimal("17.85")}
+    assert (await store.terms()).other_fees == {"bags (estimated)": Decimal("17.85")}
 
 
 async def test_set_quantities_absolute_and_remove(store, fake):
@@ -332,7 +332,7 @@ async def test_set_quantities_absolute_and_remove(store, fake):
 async def test_set_quantities_reports_refusal(store):
     [result] = await store.set_quantities({"sold-out": 2})
     assert (result.applied, result.ok) == (0, False)
-    assert "ikke 2" in result.message
+    assert "not 2" in result.message
 
 
 async def test_set_quantities_one_failure_does_not_stop_the_rest(store, fake):
@@ -373,7 +373,7 @@ async def test_an_ended_slot_is_not_the_chosen_one(store, monkeypatch):
     )
     info = await store.delivery_info()
     assert (info.chosen_start, info.chosen_end, info.edit_deadline) == (None, None, None)
-    assert info.note.startswith("Ingen tid valgt.")
+    assert info.note.startswith("No time selected.")
 
 
 @pytest.mark.parametrize(("hour", "ended"), [(19, False), (20, True)])
@@ -397,7 +397,7 @@ async def test_orders_and_order(store):
 @pytest.mark.parametrize("order_id", ["", "1/../basket/ClearBasket", "12?x=1", "١٢"])
 async def test_order_id_must_be_digits(store, fake, order_id):
     """The id goes into the URL path: only digits, never a path or query from the model."""
-    with pytest.raises(StoreError, match="Ordrenummeret skal være tal"):
+    with pytest.raises(StoreError, match="order number must be numeric"):
         await store.order(order_id)
     assert not any("GetOrderHistory" in r.url.path for r in fake.requests)
 
@@ -406,7 +406,7 @@ async def test_rejected_call_does_not_show_the_url(store, fake):
     fake.scripted["/webapi/basket/GetBasket"] = [400]
     with pytest.raises(StoreError) as err:
         await store.get_cart()
-    assert str(err.value) == "nemlig.com afviste kaldet (400)."
+    assert str(err.value) == "nemlig.com rejected the request (400)."
 
 
 async def test_orders_with_flexible_delivery(store, fake):
@@ -480,7 +480,7 @@ async def test_offers_work_while_pages_are_in_the_queue(store, fake):
 
 async def test_queue_it_waiting_room_is_a_clear_error(store, fake):
     fake.api_queue = True
-    with pytest.raises(StoreError, match="kø"):
+    with pytest.raises(StoreError, match="queue"):
         await store.offers()
 
 
@@ -530,13 +530,13 @@ def test_multi_buy_keeps_the_single_price(store):
 def test_campaign_we_cannot_describe_is_still_an_offer(store):
     campaign = {"Type": "ProductCampaignBuyXForY", "MinQuantity": 3}  # no TotalPrice
     p = store._product({"Id": 4, "Name": "Letmælk", "Price": 21.28, "Campaign": campaign})
-    assert (p.price, p.on_offer, p.offer_text) == (Decimal("21.28"), True, "Tilbud")
+    assert (p.price, p.on_offer, p.offer_text) == (Decimal("21.28"), True, "Offer")
 
 
 def test_plain_discount_says_the_before_price(store):
     campaign = {"Type": "ProductCampaignDiscount", "CampaignPrice": 79.95}
     p = store._product({"Id": 5, "Name": "Laks - back loin", "Price": 98.75, "Campaign": campaign})
-    assert p.offer_text == "Tilbud, før 98,75 kr"
+    assert p.offer_text == "Offer, was 98,75 DKK"
 
 
 def test_multi_buy_text_is_priced_by_compare(store):
@@ -565,7 +565,7 @@ async def test_offers_reads_every_offer_list(store, fake):
         "Priskup",
         "Dagstilbud",
         "Undgå madspild",
-        "Gratis",
+        "Free",
     }
     assert "5066321" not in {p.id for p in offers}  # "Frugt og grønt" is a category, not a list
     (page,) = [r for r in fake.requests if r.url.path == "/productbff/api/web/page"]
@@ -578,7 +578,7 @@ async def test_offers_reads_every_offer_list(store, fake):
         "Skarp pris",
         "kg",
     )
-    assert steak.offer_text == "Tilbud, før 158,95 kr"
+    assert steak.offer_text == "Offer, was 158,95 DKK"
     ribs = next(p for p in offers if p.id == "5060880")  # no normal price given: still an offer
     assert (ribs.before_price, ribs.offer_text) == (None, "Skarp pris")
     click = next(p for p in offers if p.id == "5012574")
@@ -637,8 +637,8 @@ async def test_offers_limit_counts_only_real_offers(store, fake, monkeypatch):
 async def test_free_gift_costs_nothing_and_says_max_one(store):
     [gift] = await store.search("mums rosinboller")
     assert (gift.price, gift.before_price) == (Decimal(0), Decimal("20.45"))
-    assert (gift.campaign, gift.max_per_order) == ("Gratis", 1)
-    assert gift.offer_text == "Gratis (max 1 stk.)"
+    assert (gift.campaign, gift.max_per_order) == ("Free", 1)
+    assert gift.offer_text == "Free (max 1 stk.)"
 
 
 async def test_offer_list_gift_is_free_with_max_one(store):
@@ -646,14 +646,14 @@ async def test_offer_list_gift_is_free_with_max_one(store):
     assert (gift.price, gift.before_price, gift.campaign) == (
         Decimal(0),
         Decimal("20.45"),
-        "Gratis",
+        "Free",
     )
-    assert (gift.offer_text, gift.max_per_order) == ("Gratis (max 1 stk.)", 1)
+    assert (gift.offer_text, gift.max_per_order) == ("Free (max 1 stk.)", 1)
 
 
 async def test_offers_without_lists_is_a_clear_error(store, fake, monkeypatch):
     monkeypatch.setattr(nemlig_offers, "OFFER_LISTS", {})
-    with pytest.raises(StoreError, match="tilbudslister"):
+    with pytest.raises(StoreError, match="offer lists"):
         await store.offers()
 
 
@@ -678,7 +678,7 @@ def _with_page(handle, page):
 async def test_offers_find_free_gifts_by_search(store, fake):
     """Live 2026-11-02: "En gave til dig" was empty, but search "gratis" found the gift."""
     gift = next(p for p in await store.offers(10) if p.id == "5606321")
-    assert (gift.price, gift.campaign, gift.max_per_order) == (Decimal(0), "Gratis", 1)
+    assert (gift.price, gift.campaign, gift.max_per_order) == (Decimal(0), "Free", 1)
     searches = [r for r in fake.requests if r.url.path == "/searchgateway/api/search"]
     assert [r.url.params["query"] for r in searches] == ["gratis"]
 
@@ -757,7 +757,7 @@ async def test_offers_work_without_a_login(store, fake, no_login):
 
 async def test_search_needs_a_login(store, fake, no_login):
     """Live 2026-11-04: searchgateway answers 500 to an anonymous token, so say so up front."""
-    with pytest.raises(StoreError, match="kræver login"):
+    with pytest.raises(StoreError, match="requires a login"):
         await store.search("mælk")
     assert fake.paths() == []
 
@@ -767,7 +767,7 @@ async def test_anonymous_token_is_renewed_once_when_it_expires(store, fake, no_l
     fake.scripted["/productbff/api/web/page"] = [401]  # the token expired: one renewal
     assert await store.offers(5) and fake.paths().count("/webapi/Token") == 2
     fake.scripted["/productbff/api/web/page"] = [401, 401]  # still refused: a clear error
-    with pytest.raises(StoreError, match="uden login"):
+    with pytest.raises(StoreError, match="without a login"):
         await store.offers(5)
 
 
@@ -783,5 +783,5 @@ async def test_settings_from_anonymous_offers_are_refetched_after_login(
 
 
 async def test_cart_still_needs_a_login(store, fake, no_login):
-    with pytest.raises(registry.StoreError, match="Intet login til nemlig"):
+    with pytest.raises(registry.StoreError, match="No login saved for nemlig"):
         await store.get_cart()

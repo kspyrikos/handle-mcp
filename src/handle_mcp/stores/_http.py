@@ -30,14 +30,14 @@ async def request(
             resp = await client.request(method, url, **kwargs)
         except RETRYABLE as exc:
             if attempt == RETRIES:
-                raise StoreError(f"{store} svarer ikke ({type(exc).__name__}).") from exc
+                raise StoreError(f"{store} is not responding ({type(exc).__name__}).") from exc
         except httpx.HTTPError as exc:
-            raise StoreError(f"Kan ikke nå {store} ({type(exc).__name__}).") from exc
+            raise StoreError(f"Could not reach {store} ({type(exc).__name__}).") from exc
         else:
             if resp.status_code != 429 and resp.status_code < 500:
                 return resp
             if attempt == RETRIES:
-                raise StoreError(f"{store} svarer {resp.status_code}. Prøv igen senere.")
+                raise StoreError(f"{store} returned HTTP {resp.status_code}. Try again later.")
         await asyncio.sleep(0.5 * 2**attempt)
     raise AssertionError("unreachable")
 

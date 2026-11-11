@@ -145,28 +145,28 @@ def _best(item: str, products: list[Any], on: date | None = None) -> BasketLine:
     sure = neg_score == -1.0 and size_rank == 0 and not over and not is_mixed
     note = None
     if over:
-        note = f"Anden størrelse: {count} x {get(product, 'size') or get(product, 'name')}."
+        note = f"Different package size: {count} x {get(product, 'size') or get(product, 'name')}."
     elif size_rank == 1:
-        note = f"Størrelsen kan ikke sammenlignes: {get(product, 'size') or get(product, 'name')}."
+        note = f"Package size cannot be compared: {get(product, 'size') or get(product, 'name')}."
     elif is_mixed:
-        note = f"Blandingsvare: {get(product, 'name')}. Tjek varen."
+        note = f"Mixed product: {get(product, 'name')}. Check the product."
     elif not sure:
-        note = "Usikkert match. Tjek varen."
+        note = "Uncertain match. Check the product."
     elif size and count != quantity:
-        note = f"{count} x {get(product, 'size') or 'pakke'} for at nå mængden."
+        note = f"{count} x {get(product, 'size') or 'pack'} to reach the requested amount."
     have = pack_size(product)
     if not size and quantity > 1 and have and have[0] in PIECES:
         if have[1] * count > quantity:
-            extra = f"{count} x {get(product, 'size') or 'pakke'} = {have[1] * count:g} stk."
+            extra = f"{count} x {get(product, 'size') or 'pack'} = {have[1] * count:g} items."
             note = " ".join(filter(None, [note, extra]))
     elif not size:
-        what = f"{quantity} pakker" if quantity > 1 and produce else "pr. kg, l eller stk"
-        hint = f"Ingen mængde på listen: billigst {what}. Skriv en mængde, fx '1 kg'."
+        what = f"{quantity} packs" if quantity > 1 and produce else "per kg, litre or item"
+        hint = f"No quantity specified: cheapest option is {what}. Specify an amount, e.g. '1 kg'."
         note = " ".join(filter(None, [note, hint]))
     note = " ".join(filter(None, [note, multi_hint(product, count, on)]))
     until = get(product, "offer_until")
     if on and until and on > until and get(product, "before_price"):
-        note = " ".join(filter(None, [note, f"Tilbuddet slutter {until:%d/%m}, før levering."]))
+        note = " ".join(filter(None, [note, f"The offer ends on {until:%d/%m}, before delivery."]))
     return BasketLine(item, count, product, line_cost, sure, note)
 
 
@@ -191,13 +191,13 @@ def _guess(
         sized = [(x, packs(size, quantity, x)) for x in ok]
         sized = [(x, n) for x, n in sized if n]
         if not sized:
-            return BasketLine(item, quantity, None, Decimal(0), False, "Ikke fundet")
+            return BasketLine(item, quantity, None, Decimal(0), False, "Not found")
         top, count = min(sized, key=lambda xn: cost(xn[0], xn[1], on))
     elif ok:
         top, count = ok[0], quantity
     else:
-        return BasketLine(item, quantity, None, Decimal(0), False, "Ikke fundet")
-    note = "Butikkens bedste søgeresultat. Navnet matcher ikke. Tjek varen."
+        return BasketLine(item, quantity, None, Decimal(0), False, "Not found")
+    note = "The store's best search result. The name does not match; check the product."
     return BasketLine(item, count, top, cost(top, count, on), False, note, guess=True)
 
 
@@ -229,12 +229,12 @@ async def quote(store: Any, items: list[str]) -> BasketQuote:
     notes = [note] if note else []
     mode, pickup_store = get(terms, "delivery_mode"), get(terms, "pickup_store")
     if mode == "pickup" and pickup_store:
-        notes.append(f"Afhentning i {pickup_store}: du henter selv varerne.")
+        notes.append(f"Pickup at {pickup_store}: you collect the products yourself.")
     elif mode != "pickup" and not terms.home_delivery and not note:
-        notes.append("Kurven er ikke sat til hjemlevering.")
+        notes.append("The cart is not set to home delivery.")
     minimum = terms.minimum_order
     if minimum is not None and 0 < products_total < minimum:  # in words, for the human
-        notes.append(f"Under minimumskøb: {minimum - products_total} kr. mangler til {minimum} kr.")
+        notes.append(f"Below the minimum order: {minimum - products_total} DKK remaining to reach {minimum} kr.")
     return BasketQuote(
         store=terms.store,
         lines=found,
@@ -265,26 +265,26 @@ def verdict(quotes: dict[str, Any]) -> dict[str, Any]:
     failed = ", ".join(n for n in quotes if n not in ok)
     if len(ok) < 2:
         priced = (
-            f"Kun {', '.join(ok)} kunne prise listen." if ok else "Ingen butik kunne prise listen."
+            f"Only {', '.join(ok)} could price the list." if ok else "No store could price the list."
         )
-        return {"cheapest": None, "summary": priced + (f" Fejl: {failed}." if failed else "")}
+        return {"cheapest": None, "summary": priced + (f" Error: {failed}." if failed else "")}
     common = set.intersection(*({ln.item for ln in q.lines if not ln.guess} for q in ok.values()))
     if not common:
-        return {"cheapest": None, "summary": "Ingen vare blev fundet i alle butikker. Tjek listen."}
+        return {"cheapest": None, "summary": "No product was found at every store. Check the shopping list."}
     totals = {
         n: sum((ln.line_total for ln in q.lines if ln.item in common), Decimal(0))
         + sum(q.fees.values(), Decimal(0))
         for n, q in ok.items()
     }
     cheapest = min(totals, key=lambda n: totals[n])
-    summary = f"Billigst: {cheapest} ({totals[cheapest]} kr. inkl. gebyrer"
-    summary += f" for de {len(common)} varer, alle butikker har)."
+    summary = f"Cheapest: {cheapest} ({totals[cheapest]} DKK including fees"
+    summary += f" for the {len(common)} products available at every store)."
     if ok[cheapest].delivery_mode == "pickup":  # no delivery: the trip and unknown fees count
-        summary += f" {cheapest} er afhentning: du henter selv varerne. Se noter."
+        summary += f" {cheapest} is pickup: you collect the products yourself. See notes."
     if any(q.missing for q in ok.values()) or any(
         not ln.sure for q in ok.values() for ln in q.lines
     ):
-        summary += " Nogle varer mangler eller er usikre. Tjek dem."
+        summary += " Some products are missing or uncertain. Check them."
     if failed:
-        summary += f" Fejl: {failed}."
+        summary += f" Error: {failed}."
     return {"cheapest": cheapest, "comparable_totals": totals, "summary": summary}

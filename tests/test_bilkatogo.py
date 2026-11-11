@@ -128,7 +128,7 @@ async def test_saved_session_logs_in_without_a_password(store, fake, saved):
 
 async def test_dead_session_says_log_in_again(store, fake, saved):
     registry.keychain_set("bilkatogo", "kunde@example.com", {"login_token": "st2.dead"})
-    with pytest.raises(StoreError, match="udløbet. Kør i en terminal: handle-mcp login bilkatogo"):
+    with pytest.raises(StoreError, match="has expired. Run in a terminal: handle-mcp login bilkatogo"):
         await store.get_cart()
     assert "/accounts.login" not in fake.paths()
 
@@ -138,7 +138,7 @@ async def test_gigya_busy_is_not_an_expired_session(store, fake, saved, code):
     """Rate limit or Gigya's own server error: the session is fine, try later."""
     registry.keychain_set("bilkatogo", "kunde@example.com", {"login_token": "st2.fake-login-token"})
     fake.scripted["/accounts.getJWT"] = [{"errorCode": code, "errorMessage": "busy"}]
-    with pytest.raises(StoreError, match="Prøv igen om lidt") as err:
+    with pytest.raises(StoreError, match="Try again shortly") as err:
         await store.get_cart()
     assert "udløbet" not in str(err.value)
 
@@ -171,13 +171,13 @@ async def test_login_never_sends_cart_cookie(store, fake):
 
 async def test_wrong_password_is_a_clear_error(store, monkeypatch):
     monkeypatch.setenv("HANDLE_BILKATOGO_PASSWORD", "forkert")
-    with pytest.raises(StoreError, match="Tjek email og kodeord"):
+    with pytest.raises(StoreError, match="Check your email and password"):
         await store.get_cart()
 
 
 async def test_expired_session_body_logs_in_again(store, fake):
     await store.get_cart()
-    fake.scripted["/api/shop/v6/Cart"] = [{"code": 1, "msg": "Du er ikke logget ind"}]
+    fake.scripted["/api/shop/v6/Cart"] = [{"code": 1, "msg": "You are not logged in"}]
     assert (await store.get_cart()).lines
     assert fake.paths().count("/api/auth/LoginJWT") == 2
 
@@ -228,7 +228,7 @@ async def test_search_uses_cart_store_and_parses(store, fake):
 
 async def test_search_without_address_says_what_to_do(store, fake):
     fake.cart = {**fake.cart, "deliveryAddress": None}
-    with pytest.raises(StoreError, match="Vælg hjemlevering"):
+    with pytest.raises(StoreError, match="Choose home delivery"):
         await store.search("mælk")
 
 
@@ -276,7 +276,7 @@ async def test_unknown_mode_fails_closed(store, fake, address):
     assert (cart.delivery_mode, cart.pickup_store) == (None, None)
     assert UNKNOWN_MODE in cart.warnings
     assert (await store.delivery_info()).note == UNKNOWN_MODE
-    with pytest.raises(StoreError, match="hjemlevering eller afhentning"):
+    with pytest.raises(StoreError, match="home delivery or pickup"):
         await store.delivery_slots()
 
 
@@ -314,7 +314,7 @@ async def test_orders_and_order(store, fake):
 
 async def test_missing_order_is_clear(store, fake):
     fake.scripted["/api/shop/v7/OrderDetails"] = [{"order": None}]
-    with pytest.raises(StoreError, match="Fandt ikke ordre"):
+    with pytest.raises(StoreError, match="Order .* was not found"):
         await store.order("1")
 
 
@@ -389,7 +389,7 @@ def test_money_in_ore_is_robust():
     assert bilka_module._kr(12345) == Decimal("123.45")
     assert bilka_module._kr("1250") == Decimal("12.50")
     assert bilka_module._kr(None) == Decimal("0.00")
-    with pytest.raises(StoreError, match="ukendt beløb"):
+    with pytest.raises(StoreError, match="unknown amount"):
         bilka_module._kr("abc")
 
 
@@ -418,7 +418,7 @@ def test_offer_has_before_price_and_offer_unit_price(store):
 
 def test_se_her_gets_a_real_text(store):
     p = store._product(_hit("Se Her", 7495, 6900, 8625), "s")
-    assert p.offer_text == "Tilbud, før 74,95 kr" and p.on_offer
+    assert p.offer_text == "Offer, was 74,95 DKK" and p.on_offer
 
 
 def test_no_offer_has_no_before_price(store):
@@ -441,7 +441,7 @@ async def test_delivery_slots_flat_fee_and_night_slots(store, fake):
     assert [s.start.date().isoformat() for s in slots] == ["2026-11-02", "2026-11-04"]
     mon, wed = slots  # Tuesday is sold out: no intervals at all
     assert not mon.available  # closed: past deadline
-    assert (wed.available, wed.price, wed.kind) == (True, Decimal("39.00"), "Nat")
+    assert (wed.available, wed.price, wed.kind) == (True, Decimal("39.00"), "Night")
     assert wed.start.isoformat() == "2026-11-04T00:00:00+01:00"
     assert wed.end.isoformat() == "2026-11-04T06:00:00+01:00"
     assert wed.note.startswith("Levering vil ske natten til onsdag.") and "<" not in wed.note
@@ -452,7 +452,7 @@ async def test_delivery_slots_flat_fee_and_night_slots(store, fake):
 async def test_pickup_slots(store, fake):
     fake.cart = fixture("cart_logged_in")
     wed = (await store.delivery_slots(days=7))[1]
-    assert (wed.kind, wed.price) == ("Afhentning", Decimal(0))
+    assert (wed.kind, wed.price) == ("Pickup", Decimal(0))
 
 
 async def test_delivery_slots_keep_exactly_days(store, monkeypatch):
@@ -464,12 +464,12 @@ async def test_delivery_slots_keep_exactly_days(store, monkeypatch):
 async def test_delivery_slots_say_when_the_fee_is_unknown(store, fake):
     fake.cart = {**fake.cart, "stat": {}}  # an empty cart may send no delivery price
     wed = (await store.delivery_slots())[1]
-    assert wed.price is None and wed.note.startswith("Gebyret er ukendt")
+    assert wed.price is None and wed.note.startswith("The fee is unknown")
 
 
 async def test_delivery_slots_need_home_delivery(store, fake):
     fake.cart = {**fake.cart, "deliveryAddress": {"sid": "1234"}}
-    with pytest.raises(StoreError, match="hjemlevering"):
+    with pytest.raises(StoreError, match="home delivery"):
         await store.delivery_slots()
 
 
@@ -477,5 +477,5 @@ async def test_offers_without_a_login_say_why(store, monkeypatch, tmp_path):
     monkeypatch.delenv("HANDLE_BILKATOGO_EMAIL")
     monkeypatch.delenv("HANDLE_BILKATOGO_PASSWORD")
     monkeypatch.setattr(registry, "CONFIG_DIR", tmp_path)
-    with pytest.raises(StoreError, match="leveringsadresse.*handle-mcp login bilkatogo"):
+    with pytest.raises(StoreError, match="delivery address.*handle-mcp login bilkatogo"):
         await store.offers()

@@ -172,7 +172,7 @@ async def test_login_keeps_the_cookies_never_the_password(store, site, env_login
 @pytest.mark.parametrize("status", [400, 401, 422])
 async def test_wrong_password(store, site, env_login, status):
     site.login_status = status
-    with pytest.raises(StoreError, match="afviser login"):
+    with pytest.raises(StoreError, match="rejected the login"):
         await store.check_login()
     assert store.session() is None
 
@@ -180,9 +180,9 @@ async def test_wrong_password(store, site, env_login, status):
 @pytest.mark.parametrize(
     "where, error",
     [
-        ("https://rema.queue-it.net/?c=1", "kø eller et bot-tjek"),
-        ("https://evil.example.com/authorize", "uventet sted"),
-        ("http://", "uventet sted"),
+        ("https://rema.queue-it.net/?c=1", "queue or bot check"),
+        ("https://evil.example.com/authorize", "redirected the login unexpectedly"),
+        ("http://", "redirected the login unexpectedly"),
     ],
 )
 async def test_login_never_goes_elsewhere(store, site, env_login, where, error):
@@ -193,7 +193,7 @@ async def test_login_never_goes_elsewhere(store, site, env_login, where, error):
 
 async def test_bot_check_on_login(store, site, env_login):
     site.login_status = 403
-    with pytest.raises(StoreError, match="bot-tjek"):
+    with pytest.raises(StoreError, match="bot check"):
         await store.check_login()
 
 
@@ -219,14 +219,14 @@ async def test_ended_token_is_renewed_and_saved(store, site):
 async def test_refused_renewal_means_log_in_again(store, site):
     site.access, site.refresh_status = jwt(NOW - timedelta(minutes=1)), 401
     saved(site, store_ids="263")
-    with pytest.raises(StoreError, match="udløbet"):
+    with pytest.raises(StoreError, match="expired"):
         await store.delivery_slots(7)
 
 
 async def test_renewal_5xx_is_a_store_error_and_not_retried(store, site):
     site.access, site.refresh_status = jwt(NOW - timedelta(minutes=1)), 502
     saved(site, store_ids="263")
-    with pytest.raises(StoreError, match="502 ved fornyelse"):
+    with pytest.raises(StoreError, match="HTTP 502 during session renewal"):
         await store.delivery_slots(7)
     assert site.calls("/api/auth/refresh") == 1
 
@@ -241,14 +241,14 @@ async def test_401_renews_once(store, site):
 async def test_second_401_means_expired(store, site):
     saved(site, store_ids="263")
     site.api_401 = 5
-    with pytest.raises(StoreError, match="udløbet"):
+    with pytest.raises(StoreError, match="expired"):
         await store.delivery_slots(7)
     assert site.calls("/api/auth/refresh") == 1
 
 
 async def test_session_without_tokens_is_expired(store):
     registry.keychain_set("rema1000", "a@example.com", {"api_session": "s1"})
-    with pytest.raises(StoreError, match="udløbet"):
+    with pytest.raises(StoreError, match="expired"):
         await store.check_login()
 
 
@@ -270,8 +270,8 @@ async def test_pickup_is_the_first_chosen_store_with_click_and_collect(store, si
     info = await store.delivery_info()
     assert info.pickup_store == "Aalborg C, Hasseris" and info.delivery_mode == "pickup"
     assert info.next_available == date(2026, 11, 11)
-    assert "Din foretrukne butik har ikke Køb & Hent endnu" in info.note
-    assert "vælger ingen tid" in info.note
+    assert "Your preferred store does not support Køb & Hent yet" in info.note
+    assert "does not select a time" in info.note
     terms = await store.terms()
     assert terms.pickup_store == "Aalborg C, Hasseris" and not terms.home_delivery
     assert site.calls("/api/v3/stores") == 1  # checked once an hour
@@ -280,22 +280,22 @@ async def test_pickup_is_the_first_chosen_store_with_click_and_collect(store, si
 async def test_store_without_click_and_collect_is_allowed(store, site):
     saved(site, store_ids="329")
     info = await store.delivery_info()
-    assert info.pickup_store is None and "Køb & Hent endnu" in info.note
+    assert info.pickup_store is None and "Køb & Hent yet" in info.note
     assert (await store.terms()).pickup_store is None
-    with pytest.raises(GateClosed, match="listen virker stadig"):
+    with pytest.raises(GateClosed, match="shopping list still work"):
         await store.delivery_slots(7)
 
 
 async def test_gone_store_asks_to_choose_again(store, site):
     saved(site, store_ids="1")
-    with pytest.raises(GateClosed, match="Vælg igen"):
+    with pytest.raises(GateClosed, match="Choose again"):
         await store.delivery_slots(7)
 
 
 async def test_no_login_no_store_no_call(store, site):
     assert (await store.delivery_info()).note == NOTE  # no nagging: search needs no store
     assert (await store.terms()).pickup_store is None
-    with pytest.raises(GateClosed, match="Ingen REMA 1000-butik valgt"):
+    with pytest.raises(GateClosed, match="No REMA 1000 store selected"):
         await store.delivery_slots(7)
     assert site.requests == []
 
@@ -304,7 +304,7 @@ async def test_env_store_without_login_shows_the_store_not_times(store, site, mo
     monkeypatch.setenv("HANDLE_REMA1000_STORE_ID", "263")
     info = await store.delivery_info()
     assert info.pickup_store == "Aalborg C, Hasseris" and info.next_available is None
-    assert "Log ind for at se tiderne" in info.note
+    assert "Log in to see pickup times" in info.note
     assert all(r.url.host == "api.digital.rema1000.dk" for r in site.requests)
 
 
@@ -326,7 +326,7 @@ async def test_slots_in_danish_time_sorted_and_in_range(store, site):
     ]
     assert [s.available for s in slots] == [False, False, True]
     assert slots[0].price is None and slots[0].kind == "Køb & Hent"
-    assert "Aalborg C, Hasseris" in slots[0].note and "gebyr" in slots[0].note
+    assert "Aalborg C, Hasseris" in slots[0].note and "fee" in slots[0].note
 
 
 async def test_no_slots(store, site):
@@ -338,7 +338,7 @@ async def test_no_slots(store, site):
 async def test_bad_slot_time(store, site):
     saved(site, store_ids="263")
     site.slots = {"data": {"2026-11-11": [{"from": "i morgen", "to": "x"}]}}
-    with pytest.raises(StoreError, match="ikke er en tid"):
+    with pytest.raises(StoreError, match="invalid time"):
         await store.delivery_slots(7)
 
 
@@ -346,7 +346,7 @@ async def test_store_choices_search_name_postcode_and_city(store):
     assert [i for i, _ in await store.store_choices("aalborg")] == [263, 265]
     assert [i for i, _ in await store.store_choices("8000")] == [270]
     (_, text), *_ = await store.store_choices("Hasseris")
-    assert text == "Aalborg C, Hasseris, 9000 Aalborg. Køb & Hent: ja"
+    assert text == "Aalborg C, Hasseris, 9000 Aalborg. Køb & Hent: yes"
 
 
 # `handle-mcp login rema1000` on a terminal
@@ -356,13 +356,13 @@ async def test_choose_on_the_terminal(store, monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO("ingen-by\naalborg\n2,1,9\n"))
     await cli._choose(store)
     assert store._stores == "265,263"
-    assert "Valgt: Aalborg C, Østerbro" in capsys.readouterr().err
+    assert "Selected: Aalborg C, Østerbro" in capsys.readouterr().err
 
 
 async def test_skip_the_choice(store, monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
     await cli._choose(store)
-    assert store._stores == "" and "Ingen butik valgt" in capsys.readouterr().err
+    assert store._stores == "" and "No store selected" in capsys.readouterr().err
 
 
 def test_login_saves_session_and_stores(site, monkeypatch, capsys):
@@ -404,4 +404,4 @@ async def test_delivery_info_survives_failing_times(store, site):
     saved(site, store_ids="263")
     info = await store.delivery_info()  # an expired session: the store is still known
     assert info.pickup_store == "Aalborg C, Hasseris" and info.next_available is None
-    assert "Tiderne kunne ikke læses" in info.note and "udløbet" in info.note
+    assert "Could not read the pickup times" in info.note and "expired" in info.note

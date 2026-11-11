@@ -1,8 +1,8 @@
 # Build your own skill on top
 
-The server finds and counts. Your skill or agent picks. Taste, favourites, budget and øko rules belong in your skill, never in this server.
+The server finds and counts. Your skill or agent picks. Taste, favourites, budget and organic-product rules belong in your skill, never in this server.
 
-`compare_basket` gives each list line up to 5 `candidates`. The first has `suggested: true`: the server's guess by word rules, nothing more. When the search found an øko product, one candidate is øko.
+`compare_basket` gives each list line up to 5 `candidates`. The first has `suggested: true`: the server's guess by word rules, nothing more. When the search found an organic product, one candidate is organic.
 
 | Field | Meaning |
 |---|---|
@@ -18,6 +18,6 @@ The server finds and counts. Your skill or agent picks. Taste, favourites, budge
 | `processed` | `frost` or `konserves` |
 | `blend` | A mix, e.g. minced meat with vegetables |
 | `oeko` | Organic |
-| `note` | Why the line is unsure, in Danish |
+| `note` | Why the line is unsure, in English |
 
 Flags that are false and facts that are unknown are left out, to keep the answer small. `sure: false` on a line means: look, or ask the user. When no candidate fits, call `search_products` with other words.

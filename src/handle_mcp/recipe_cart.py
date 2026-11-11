@@ -41,23 +41,23 @@ def plan(
     for key in [*skip, *swap, *include]:
         if not any(_matches(key, i) for i in items):
             names = ", ".join(i["ingredient"] for i in items)
-            raise PlanError(f"Opskriften har ikke {key!r}. Ingredienser: {names}.")
+            raise PlanError(f"The recipe does not contain {key!r}. Ingredients: {names}.")
     lines: dict[str, dict] = {}
     skipped = []
     for item in items:
         product = item["product"]
         reason = None
         if any(_matches(k, item) for k in skip):
-            reason = "fravalgt"
+            reason = "skipped by the user"
         elif item["have_at_home"] and not any(_matches(k, item) for k in include):
-            reason = "har du (butikken regner med det)"
+            reason = "assumed to be at home (the store assumes you have it)"
         if new_id := next((v for k, v in swap.items() if _matches(k, item)), None):
             product = next((a for a in item["alternatives"] if str(a["id"]) == str(new_id)), None)
             if product is None:
-                ids = ", ".join(f"{a['id']} {a['name']}" for a in item["alternatives"]) or "ingen"
-                raise PlanError(f"{new_id} er ikke et alternativ til {item['ingredient']}: {ids}.")
+                ids = ", ".join(f"{a['id']} {a['name']}" for a in item["alternatives"]) or "none"
+                raise PlanError(f"{new_id} is not an alternative for {item['ingredient']}: {ids}.")
         if reason is None and not product.get("available", True):
-            reason = "udsolgt"
+            reason = "sold out"
         if reason:
             skipped.append(
                 {"ingredient": item["ingredient"], "name": product["name"], "reason": reason}

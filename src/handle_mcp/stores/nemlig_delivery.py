@@ -29,7 +29,7 @@ def _time(value: str | None) -> datetime | None:
     try:
         return datetime.fromisoformat(value)
     except ValueError:
-        log.debug("nemlig: ikke en tid: %r", value)
+        log.debug("nemlig: not a time: %r", value)
         return None
 
 
@@ -59,9 +59,9 @@ class DeliveryMixin:
             chosen_end=end,
             edit_deadline=deadline,
             note=(
-                f"Valgt tid i kurven: {chosen}. Gebyret afhænger af tiden (ca. 19-51 kr.)."
+                f"Selected time in the cart: {chosen}. The fee depends on the time (approximately 19-51 DKK)."
                 if chosen
-                else "Ingen tid valgt. Gebyret afhænger af tiden (ca. 19-51 kr.). Vælg på nemlig.com."
+                else "No time selected. The fee depends on the time (approximately 19-51 DKK). Choose a time on nemlig.com."
             ),
         )
 

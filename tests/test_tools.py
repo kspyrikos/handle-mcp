@@ -54,12 +54,12 @@ async def test_search_one_broken_store_does_not_stop_the_others():
 
 
 async def test_search_unknown_store_is_a_clear_error():
-    with pytest.raises(ToolError, match="Ukendt butik 'netto'"):
+    with pytest.raises(ToolError, match="Unknown store 'netto'"):
         await server.search_products("mælk", stores=["netto"])
 
 
 async def test_not_implemented_answers_politely():
-    with pytest.raises(ToolError, match="kan ikke det endnu"):
+    with pytest.raises(ToolError, match="does not support this yet"):
         await server.get_orders("broken")
 
 
@@ -72,10 +72,10 @@ async def test_set_cart_quantities_returns_results_and_new_cart():
 @pytest.mark.parametrize(
     "items, match",
     [
-        ({}, "Ingen varer"),
-        ({"1": -1}, "Antal skal"),
-        ({"1": 51}, "Antal skal"),
-        ({str(i): 1 for i in range(51)}, "Højst 50"),
+        ({}, "No products"),
+        ({"1": -1}, "Quantity must"),
+        ({"1": 51}, "Quantity must"),
+        ({str(i): 1 for i in range(51)}, "At most 50"),
     ],
 )
 async def test_set_cart_quantities_rejects_bad_input(items, match):
@@ -99,7 +99,7 @@ async def test_recipes_in_a_store_without_recipes_do_not_stop_the_others(monkeyp
     monkeypatch.setattr(BrokenStore, "recipes", no_recipes)
     result = await server.search_recipes("karry")
     assert result["fake"][0]["name"] == "karry til 4"
-    assert result["broken"]["error"] == "broken kan ikke det endnu."
+    assert result["broken"]["error"] == "broken does not support this yet."
 
 
 async def test_delivery_slots_in_time_order_cheapest_first_only_free():
@@ -158,7 +158,7 @@ async def test_get_cart_without_a_store_gives_every_cart(monkeypatch):
 
 
 async def test_get_cart_with_an_empty_store_name_is_an_error():
-    with pytest.raises(ToolError, match="Ukendt butik ''"):
+    with pytest.raises(ToolError, match="Unknown store ''"):
         await server.get_cart("")
 
 

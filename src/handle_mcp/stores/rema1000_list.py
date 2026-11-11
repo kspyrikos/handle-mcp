@@ -21,10 +21,10 @@ ATTEMPTS = 3  # a POST is sent again only after a read shows the first one did n
 WAIT = 1.0  # seconds between those reads
 LIST_PAGES = 10
 IS_LIST = (
-    f'Kurven er listen "{LIST}" i REMA 1000-appen. Du bestiller, vælger tid og betaler selv '
-    "hos REMA 1000. Pakkegebyret ved Køb & Hent kendes ikke og er ikke med."
+    f'The cart is the list "{LIST}" in the REMA 1000 app. You place the order, choose a time and pay yourself '
+    "at REMA 1000. The packing fee for Køb & Hent is unknown and is not included."
 )
-PRIMARY = f'REMA gjorde listen "{LIST}" primær. Gør din egen liste primær igen i appen.'
+PRIMARY = f'REMA 1000 made the list "{LIST}" the primary list. Set your own list as primary again in the app.'
 
 
 def _num(value: Any) -> Decimal | None:
@@ -83,12 +83,12 @@ class RemaListMixin:
         many other lists have the name. Only the exact name counts."""
         await self._bearer()
         if not self._user:
-            raise StoreError("REMA 1000: login gav intet bruger-id. API'et kan have ændret sig.")
+            raise StoreError("REMA 1000 login returned no user ID. Its API may have changed.")
         ids: list[int] = []
         for page in range(1, LIST_PAGES + 1):
             data = await self._api_json(
                 f"v3/users/{self._user}/shopping-lists",
-                "dine lister",
+                "your lists",
                 {"per_page": 100, "page": page},
             )
             rows = data.get("data") if isinstance(data.get("data"), list) else []
@@ -108,7 +108,7 @@ class RemaListMixin:
         data = data["data"] if isinstance(data.get("data"), dict) else data
         if _id(data.get("id")) != list_id or not isinstance(data.get("items") or [], list):
             raise StoreError(
-                "REMA 1000 sendte en anden liste end bedt om. API'et kan have ændret sig."
+                "REMA 1000 returned a different list than requested. Its API may have changed."
             )
         data["items"] = [i for i in data.get("items") or [] if isinstance(i, dict)]
         return data
@@ -123,7 +123,7 @@ class RemaListMixin:
         list_id, extra = await self._lists()
         if list_id is None:
             cart.warnings.append(
-                f'Listen "{LIST}" findes ikke endnu. Den laves, når du lægger noget i kurven.'
+                f'The list "{LIST}" does not exist yet. It is created when you add something to the cart.'
             )
             return cart
         full = await self._read(list_id)
@@ -152,11 +152,11 @@ class RemaListMixin:
             cart.warnings.append(PRIMARY)
         if extra:
             cart.warnings.append(
-                f'Der er {extra} liste(r) mere med navnet "{LIST}". De bruges ikke.'
+                f'There are {extra} more list(s) named "{LIST}". They are not used.'
             )
         if texts:
             cart.warnings.append(
-                f"{texts} linje(r) på listen er tekst uden pris og er ikke med i summen."
+                f"{texts} line(s) on the list are text without prices and are not included in the total."
             )
         return cart
 
@@ -164,7 +164,7 @@ class RemaListMixin:
         """Absolute amounts on the list; 0 removes. Read back and compared. Never orders or pays."""
         # Only the id as REMA writes it ("7", never "007"), so it matches the lines read back.
         want = {pid: n for pid, n in items.items() if str(_id(pid) or "") == pid and n >= 0}
-        failed = {pid: "Ugyldigt varenummer eller antal." for pid in items if pid not in want}
+        failed = {pid: "Invalid product ID or quantity." for pid in items if pid not in want}
         applied: dict[str, int] = {}
         warn = None
         if want:
@@ -177,7 +177,7 @@ class RemaListMixin:
                 continue
             got = applied.get(pid, 0)
             ok = got == n
-            msg = None if ok else f"Listen har {got} i stedet for {n}."
+            msg = None if ok else f"The list has {got} instead of {n}."
             out.append(QuantityResult(pid, n, got, ok, msg if not ok else warn))
         return out
 
@@ -209,7 +209,7 @@ class RemaListMixin:
             try:
                 await self._write("PATCH", base, body, None, failed)
             except StoreError:  # the changes above have landed: still read back and report
-                cleanup = "REMA 1000 fjernede ikke de gamle linjer. Se listen i appen."
+                cleanup = "REMA 1000 did not remove the old lines. Check the list in the app."
         back = await self._read(list_id)
         applied: dict[str, int] = {}
         for item in back["items"]:
@@ -255,7 +255,7 @@ class RemaListMixin:
                 if found:
                     return found
         # Noted per product, so the changes already made in this call are still reported.
-        failed[pid] = "REMA 1000 svarer ikke, og varen kom ikke på listen. Prøv igen om lidt."
+        failed[pid] = "REMA 1000 is not responding, and the product was not added to the list. Try again shortly."
         return []
 
     async def _create(self) -> int:
@@ -272,8 +272,8 @@ class RemaListMixin:
             if list_id is not None:
                 return list_id
             if not unsure:
-                raise StoreError(f'REMA 1000: listen "{LIST}" blev ikke fundet efter oprettelsen.')
-        raise StoreError(f'REMA 1000 svarer ikke, og listen "{LIST}" blev ikke lavet. Prøv igen.')
+                raise StoreError(f'REMA 1000: the list "{LIST}" was not found after creation.')
+        raise StoreError(f'REMA 1000 is not responding, and the list "{LIST}" was not created. Try again.')
 
     async def _write(
         self,
@@ -290,6 +290,6 @@ class RemaListMixin:
         if 200 <= status < 300:
             return
         if 400 <= status < 500 and pid:
-            failed[pid] = f"REMA 1000 afviste varen ({status}). Findes den i sortimentet?"
+            failed[pid] = f"REMA 1000 rejected the product ({status}). Is it in the assortment?"
             return
-        raise StoreError(f"REMA 1000 afviste ændringen af listen ({status}).")
+        raise StoreError(f"REMA 1000 rejected the list update ({status}).")

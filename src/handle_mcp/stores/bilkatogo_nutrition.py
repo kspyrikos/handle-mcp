@@ -19,8 +19,8 @@ from handle_mcp.stores import StoreError
 from handle_mcp.stores.bilkatogo_algolia import ALGOLIA, ALGOLIA_HEADERS, ALGOLIA_INDEX
 
 NUTRITION_CODE = "nutritional_100"
-NO_LABEL = "BilkaToGo viser ingen næringsdeklaration for varen (ofte frisk kød, frugt og grønt)."
-UNKNOWN = "BilkaToGo kender ikke varen."
+NO_LABEL = "BilkaToGo does not provide a nutrition label for this product (often the case for fresh meat, fruit and vegetables)."
+UNKNOWN = "BilkaToGo does not recognize this product."
 
 
 def product_nutrition(hit: dict) -> ProductNutrition:
@@ -46,7 +46,7 @@ class BilkaNutritionMixin:
     async def nutrition(self, product_ids: list[str]) -> list[ProductNutrition]:
         if bad := [i for i in product_ids if not re.fullmatch(r"\d{1,12}", i)]:
             raise StoreError(
-                f"Ukendt vare-id hos BilkaToGo: {', '.join(bad)}. Brug id'et fra søgningen."
+                f"Unknown product ID at BilkaToGo: {', '.join(bad)}. Use the ID returned by product search."
             )
         params = urlencode(
             {
@@ -59,12 +59,12 @@ class BilkaNutritionMixin:
         body = {"requests": [{"indexName": ALGOLIA_INDEX, "params": params}]}
         resp = await self._send("POST", ALGOLIA, headers=ALGOLIA_HEADERS, json=body)
         if resp.status_code != 200:
-            raise StoreError(f"BilkaToGo-næringsindhold fejlede ({resp.status_code}).")
+            raise StoreError(f"BilkaToGo nutrition lookup failed ({resp.status_code}).")
         try:
             hits = {str(h["objectID"]): h for h in self._json(resp, "næring")["results"][0]["hits"]}
             found = {i: product_nutrition(h) for i, h in hits.items()}
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
-            raise StoreError("BilkaToGo-næringsindhold har ændret format.") from exc
+            raise StoreError("BilkaToGo nutrition data has changed format.") from exc
         return [
             found.get(i) or ProductNutrition("bilkatogo", i, None, None, UNKNOWN)
             for i in product_ids

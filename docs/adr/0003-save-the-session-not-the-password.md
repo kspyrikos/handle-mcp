@@ -5,7 +5,7 @@
 - nemlig.com: the `.ASPXAUTH` cookie (lives 1 year).
 - BilkaToGo: the Gigya `login_token`, which buys a fresh 24-hour JWT on each start.
 
-The keychain entry (and the `--from-env` file) is `{"email", "session"}`. When the session dies, the tool says "Login til <store> er udløbet. Kør i en terminal: handle-mcp login <store>".
+The keychain entry (and the `--from-env` file) is `{"email", "session"}`. When the session dies, the tool says "The login for <store> has expired. Run in a terminal: handle-mcp login <store>".
 
 ## Why
 

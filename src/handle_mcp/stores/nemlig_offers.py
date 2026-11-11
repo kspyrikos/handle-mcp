@@ -25,7 +25,7 @@ OFFER_LISTS = {
     "priskup": "Priskup",
     "dagstilbud": "Dagstilbud",
     "undgå madspild": "Undgå madspild",
-    "en gave til dig": "Gratis",
+    "en gave til dig": "Free",
 }
 UNITS = {"Weight": "kg", "Volume": "l", "Pieces": "stk"}
 MULTI = re.compile(r"^(Mix )?\d+ stk\.")
@@ -50,10 +50,10 @@ def offer_product(p: dict, campaign: str) -> Product | None:
         (ln["text"] for ln in p.get("campaignLines") or [] if MULTI.match(ln.get("text") or "")),
         None,
     )
-    if campaign == "Gratis" or (price == 0 and before):
-        campaign, text = "Gratis", "Gratis"
+    if campaign == "Free" or (price == 0 and before):
+        campaign, text = "Free", "Free"
     else:
-        text = multi or (f"Tilbud, før {_text(before)} kr" if before else campaign)
+        text = multi or (f"Offer, was {_text(before)} DKK" if before else campaign)
     if limit:
         text += f" (max {limit} stk.)"
     per_unit = p.get("pricePerUnit") or {}
@@ -97,30 +97,30 @@ class OffersMixin:
             in OFFER_LISTS
         ]
         if not lists:
-            raise StoreError("Fandt ingen tilbudslister hos nemlig. Siden kan have ændret sig.")
+            raise StoreError("No offer lists were found at nemlig. The website may have changed.")
         products: dict[str, Product] = {}
         broken = 0
         for name, items in lists:
             try:  # one broken list must not hide the others
                 found = [o for p in items if (o := offer_product(p, name))][:limit]
             except (KeyError, TypeError, ValueError) as exc:
-                log.warning("nemlig-tilbudslisten %s har ændret format: %r", name, exc)
+                log.warning("nemlig offer list %s has changed format: %r", name, exc)
                 broken += 1
                 continue
             for product in found:
                 if product:
                     products.setdefault(product.id, product)
         if broken == len(lists):
-            raise StoreError("nemligs tilbudslister har ændret format.")
+            raise StoreError("nemlig offer lists have changed format.")
         # "En gave til dig" is often empty (live 2026-11-02), but a search for "gratis" finds the
         # free gifts (ProductCampaignFreeProduct). A free-text search, so it may change.
         # Search needs a login; without one the lists above are the whole answer.
         gifts: list[Product] = []
         if self._has_login():
             try:
-                gifts = [p for p in await self.search("gratis", 50) if p.campaign == "Gratis"]
+                gifts = [p for p in await self.search("gratis", 50) if p.campaign == "Free"]
             except StoreError as exc:
-                log.warning("nemlig-gaver fejlede: %s", exc)
+                log.warning("nemlig gift search failed: %s", exc)
         for gift in gifts:
             products.setdefault(gift.id, gift)
         return list(products.values())

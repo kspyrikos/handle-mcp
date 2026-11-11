@@ -140,13 +140,13 @@ class Rema1000Store(RemaAuthMixin, RemaPickupMixin, RemaListMixin, RemaNutrition
             self._client, "GET", f"{API}/{path}", NAME, params=params, headers=HEADERS
         )
         if resp.status_code != 200:
-            raise StoreError(f"REMA 1000 svarer {resp.status_code}. Prøv igen senere.")
+            raise StoreError(f"REMA 1000 returned HTTP {resp.status_code}. Try again later.")
         try:
             data = resp.json()
         except ValueError as exc:  # a queue or bot page instead of JSON: never work around it
-            raise StoreError("REMA 1000 svarer ikke med data lige nu. Prøv igen senere.") from exc
+            raise StoreError("REMA 1000 is not returning data right now. Try again later.") from exc
         if not isinstance(data, dict) or not isinstance(data.get("data"), list):
-            raise StoreError("REMA 1000 har ændret sit svar. handle-mcp skal opdateres.")
+            raise StoreError("REMA 1000 has changed its response. handle-mcp needs to be updated.")
         return data
 
     async def _products(

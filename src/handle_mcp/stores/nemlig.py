@@ -57,7 +57,7 @@ def _bag_fee() -> Decimal:
     try:
         return Decimal(raw.strip().replace(",", "."))
     except InvalidOperation:
-        log.warning("HANDLE_NEMLIG_BAG_FEE=%r er ikke et tal. Bruger %s kr.", raw, BAG_FEE)
+        log.warning("HANDLE_NEMLIG_BAG_FEE=%r is not a number. Using %s DKK.", raw, BAG_FEE)
         return BAG_FEE
 
 
@@ -79,7 +79,7 @@ def _offer(campaign: dict | None) -> str | None:
         return f"{qty} for {_kr(total)} kr"
     if (pct := campaign.get("DiscountPercent")) and _discount_price(campaign):
         return f"-{pct} %"
-    return "Tilbud" if campaign.get("Type") else None  # a campaign we cannot describe
+    return "Offer" if campaign.get("Type") else None  # a campaign we cannot describe
 
 
 def _discount_price(campaign: dict | None) -> Decimal | None:
@@ -147,18 +147,18 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
         )
         host = resp.url.host
         if host == "queue-it.net" or host.endswith(".queue-it.net"):
-            raise StoreError("nemlig.com har kø lige nu (queue-it). Prøv igen om lidt.")
+            raise StoreError("nemlig.com currently has a queue (queue-it). Try again shortly.")
         if resp.status_code == 401:
             raise _Unauthorized
         if resp.status_code >= 400:  # the URL may hold ids: stderr only, path without query
             log.warning("nemlig.com %s %s -> %s", method, resp.url.path, resp.status_code)
             error = NotFound if resp.status_code == 404 else StoreError
-            raise error(f"nemlig.com afviste kaldet ({resp.status_code}).")
+            raise error(f"nemlig.com rejected the request ({resp.status_code}).")
         try:
             return resp.json() if resp.content else None
         except ValueError as exc:
             raise StoreError(
-                "nemlig.com svarede ikke med JSON. API'et kan have ændret sig."
+                "nemlig.com did not return JSON. Its API may have changed."
             ) from exc
 
     async def _api(self, method: str, url: str, **kwargs: Any) -> Any:
@@ -171,7 +171,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
                 return await self._send(method, url, **kwargs)
             except _Unauthorized:
                 if renew is None:
-                    bad = StoreError("nemlig.com afviser login. Tjek email og kodeord.")
+                    bad = StoreError("nemlig.com rejected the login. Check your email and password.")
                     raise (expired(self.name) if self._resumed else bad) from None
                 try:
                     await renew()
@@ -199,7 +199,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             except _Unauthorized:
                 if last:
                     raise StoreError(
-                        "nemlig.com afviser kaldet uden login. Gem et login: handle-mcp login nemlig"
+                        "nemlig.com rejected the request without a login. Save one with: handle-mcp login nemlig"
                     ) from None
                 self._bearer = None  # expired: the next round fetches a fresh one
         raise AssertionError("unreachable")
@@ -224,9 +224,9 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
                 json={"Username": login["email"], "Password": login["password"]} | LOGIN_FLAGS,
             )
         except _Unauthorized:
-            raise StoreError("nemlig.com afviser login. Tjek email og kodeord.") from None
+            raise StoreError("nemlig.com rejected the login. Check your email and password.") from None
         if not isinstance(result, dict) or "RedirectUrl" not in result:
-            raise StoreError("nemlig.com login fejlede. Tjek email og kodeord.")
+            raise StoreError("nemlig.com login failed. Check your email and password.")
         await self._renew_token()  # tokens change after login
         self._logged_in = True
         log.info("logged in to nemlig.com")
@@ -267,7 +267,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             if logged:  # without a login, nemlig answers for a default zone and time
                 basket = await self._basket()
         except StoreError as exc:  # search still works, only less exact
-            log.warning("nemlig: søger med standardværdier: %s", exc)
+            log.warning("nemlig: retrying with default search parameters: %s", exc)
         settings = {
             "timestamp": app.get("CombinedProductsAndSitecoreTimestamp", ""),
             "timeslotUtc": basket.get("TimeslotUtc", ""),
@@ -289,7 +289,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
     async def search(self, query: str, limit: int = 10) -> list[Product]:
         if not self._has_login():
             raise StoreError(
-                "nemlig-søgning kræver login (tilbud gør ikke). Gem et login: handle-mcp login nemlig"
+                "nemlig product search requires a login (offers do not). Save a login with: handle-mcp login nemlig"
             )
         params = {"query": query, "take": limit, "skip": 0, "recipeCount": 0}
         params |= await self._search_settings()
@@ -297,7 +297,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
         try:
             hits = data["Products"]["Products"]
         except (KeyError, TypeError) as exc:
-            raise StoreError("nemlig-søgning har ændret format.") from exc
+            raise StoreError("nemlig product search has changed format.") from exc
         return [self._product(h) for h in hits]
 
     def _product(self, hit: dict) -> Product:
@@ -309,9 +309,9 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             now = None
         offer = _offer(campaign) if now is not None or not _discount_price(campaign) else None
         if (campaign or {}).get("Type") == FREE and now is not None:
-            offer = "Gratis"
-        elif offer == "Tilbud" and now is not None:
-            offer = f"Tilbud, før {_kr(price)} kr"
+            offer = "Free"
+        elif offer == "Offer" and now is not None:
+            offer = f"Offer, was {_kr(price)} DKK"
         limit = (campaign or {}).get("MaxQuantity") or None
         if offer and limit:
             offer += f" (max {limit} stk.)"
@@ -334,8 +334,8 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             available=avail.get("IsDeliveryAvailable", True)
             and avail.get("IsAvailableInStock", True),
             category=hit.get("Category") or None,
-            campaign="Gratis"
-            if offer and offer.startswith("Gratis")
+            campaign="Free"
+            if offer and offer.startswith("Free")
             else hit.get("CampaignAttribute"),
             max_per_order=limit if offer else None,
         )
@@ -420,7 +420,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
                 0,
             )
             ok = applied == quantity
-            message = None if ok else f"nemlig satte antallet til {applied}, ikke {quantity}."
+            message = None if ok else f"nemlig set the quantity to {applied}, not {quantity}."
             results.append(QuantityResult(product_id, quantity, applied, ok, message))
         return results
 
@@ -433,7 +433,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             delivery_mode="home",
             home_delivery=True,
             delivery_fee=_money(basket.get("DeliveryPrice")),
-            other_fees={"poser (anslået)": _bag_fee()}
+            other_fees={"bags (estimated)": _bag_fee()}
             if empty
             else {"poser": bags}
             if bags
@@ -462,7 +462,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
 
     async def order(self, order_id: str) -> Order:
         if not re.fullmatch(r"[0-9]{1,20}", order_id):  # it goes into the URL path
-            raise StoreError("Ordrenummeret skal være tal, som i get_orders.")
+            raise StoreError("The order number must be numeric, as returned by get_orders.")
         data = await self._api("GET", f"{BASE}/webapi/v2/order/GetOrderHistory/{order_id}") or {}
         lines = [
             CartLine(
@@ -474,7 +474,7 @@ class NemligStore(RecipesMixin, OffersMixin, DeliveryMixin, NutritionMixin):
             for ln in data.get("Lines") or []
         ]
         if not lines and not data.get("Id"):
-            raise StoreError(f"Fandt ikke ordre {order_id} hos nemlig.")
+            raise StoreError(f"Order {order_id} was not found at nemlig.")
         meta = {"Id": order_id, **{k: v for k, v in data.items() if k != "Lines"}}
         order = self._order(meta, lines)
         if not order.total:

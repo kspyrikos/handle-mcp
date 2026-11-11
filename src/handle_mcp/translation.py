@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from functools import lru_cache
 from threading import Lock
 from typing import Any
@@ -34,6 +35,9 @@ _TEXT_FIELDS = frozenset(
         "steps",
         "tip",
         "note",
+        "notes",
+        "summary",
+        "hint",
         "warnings",
         "message",
         "reason",
@@ -110,11 +114,24 @@ def _cached_translate(text: str) -> str:
     return _argos_translate(text)
 
 
+_STORE_NAME_RE = re.compile(r"(?i)\b(?:BilkaToGo|Bilka|REMA\s+1000|nemlig(?:\.com)?|Køb\s*&\s*Hent)\b")
+
+
 def translate_text(text: str) -> str:
-    """Translate one user-facing string when English output is enabled."""
+    """Translate user-facing text while preserving official store names verbatim."""
     if not enabled():
         return text
-    return _cached_translate(text)
+    parts = _STORE_NAME_RE.split(text)
+    names = _STORE_NAME_RE.findall(text)
+    if not names:
+        return _cached_translate(text)
+    output: list[str] = []
+    for index, part in enumerate(parts):
+        if part:
+            output.append(_cached_translate(part))
+        if index < len(names):
+            output.append(names[index])
+    return "".join(output)
 
 
 def _translate_value(value: Any) -> Any:

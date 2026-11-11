@@ -27,10 +27,10 @@ STORE_PAGES = 10  # 1000 stores: REMA has about 450
 SHOWN = 40  # most stores listed at once on the login terminal
 KIND = "Køb & Hent"
 NOTE = (
-    "REMA 1000 har kun Køb & Hent eller handel i butikken, ingen levering. "
-    "Køb & Hent har et pakkegebyr efter ordrens størrelse, som REMA ikke oplyser her."
+    "REMA 1000 only supports Køb & Hent pickup or in-store shopping; it does not deliver. "
+    "Køb & Hent has a packing fee based on order size; REMA 1000 does not provide the fee here."
 )
-NO_TIME = "Tiden vælges og betales hos REMA 1000. handle-mcp vælger ingen tid."
+NO_TIME = "Choose and pay for the time at REMA 1000. handle-mcp does not select a time."
 
 
 class GateClosed(StoreError):
@@ -38,7 +38,7 @@ class GateClosed(StoreError):
 
 
 def no_store() -> GateClosed:
-    return GateClosed("Ingen REMA 1000-butik valgt. Kør i en terminal: handle-mcp login rema1000")
+    return GateClosed("No REMA 1000 store selected. Run in a terminal: handle-mcp login rema1000")
 
 
 @dataclass
@@ -71,11 +71,11 @@ def judge(ids: list[int], rows: list[dict]) -> Pickup | GateClosed:
         earlier = True
     if earlier:
         return GateClosed(
-            "Ingen af dine valgte REMA 1000-butikker har Køb & Hent endnu. Søgning og "
-            "listen virker stadig, og tiderne kommer, så snart en af dem får det."
+            "None of your selected REMA 1000 stores supports Køb & Hent yet. Search and "
+            "the shopping list still work. Pickup times will appear as soon as one of them supports it."
         )
     return GateClosed(
-        "Dine valgte REMA 1000-butikker findes ikke længere. Vælg igen: handle-mcp login rema1000"
+        "Your selected REMA 1000 stores are no longer available. Choose again: handle-mcp login rema1000"
     )
 
 
@@ -83,7 +83,7 @@ def label(row: dict) -> str:
     """One line of the login list: name, postcode and city, Køb & Hent yes or no."""
     place = f"{row.get('postal_code') or ''} {row.get('city') or ''}".strip()
     text = str(row.get("name") or "").strip() + (f", {place}" if place else "")
-    yes = "ja" if row.get("is_click_and_collect_active") is True else "nej"
+    yes = "yes" if row.get("is_click_and_collect_active") is True else "no"
     return f"{text}. Køb & Hent: {yes}"
 
 
@@ -145,11 +145,11 @@ class RemaPickupMixin:
         return verdict
 
     async def _slots(self, pickup: Pickup) -> list[DeliverySlot]:
-        data = await self._api_json(f"v3/stores/{pickup.id}/time-slots", "afhentningstiderne")
+        data = await self._api_json(f"v3/stores/{pickup.id}/time-slots", "pickup times")
         days = data.get("data")
         if not isinstance(days, dict):  # no times: REMA answers []
             return []
-        note = f"Afhentning i {pickup.name}. REMA 1000 oplyser ikke et gebyr her."
+        note = f"Pickup at {pickup.name}. REMA 1000 does not provide the fee here."
         out = []
         for slots in days.values():
             for slot in slots if isinstance(slots, list) else []:
@@ -158,8 +158,8 @@ class RemaPickupMixin:
                     end = datetime.fromisoformat(slot["to"]).astimezone(TZ)
                 except (KeyError, TypeError, ValueError) as exc:
                     raise StoreError(
-                        "REMA 1000 sendte en afhentningstid, der ikke er en tid. "
-                        "API'et kan have ændret sig."
+                        "REMA 1000 returned a pickup slot with an invalid time. "
+                        "Its API may have changed."
                     ) from exc
                 available = slot.get("is_available") is True
                 out.append(DeliverySlot(self.name, start, end, None, available, KIND, note))
@@ -178,17 +178,17 @@ class RemaPickupMixin:
         except GateClosed as exc:  # no store chosen: no nagging, search works without one
             note = f"{NOTE} {exc}" if self._chosen() else NOTE
             return DeliveryInfo(store=self.name, note=note, delivery_mode="pickup")
-        note = f"Køb & Hent i {pickup.name}. {NO_TIME} {NOTE.split('. ', 1)[1]}"
+        note = f"Køb & Hent pickup at {pickup.name}. {NO_TIME} {NOTE.split('. ', 1)[1]}"
         if pickup.earlier:
-            note += f" Din foretrukne butik har ikke Køb & Hent endnu; bruger {pickup.name}."
+            note += f" Your preferred store does not support Køb & Hent yet; using {pickup.name}."
         nxt: date | None = None
         if has_login(self.name):  # the times need a login; the store list does not
             try:
                 nxt = next((s.start.date() for s in await self._slots(pickup) if s.available), None)
             except StoreError as exc:  # the store and the note still hold
-                note += f" Tiderne kunne ikke læses: {exc}"
+                note += f" Could not read the pickup times: {exc}"
         else:
-            note += " Log ind for at se tiderne: handle-mcp login rema1000"
+            note += " Log in to see pickup times: handle-mcp login rema1000"
         return DeliveryInfo(
             store=self.name, next_available=nxt, note=note, delivery_mode="pickup",
             pickup_store=pickup.name,

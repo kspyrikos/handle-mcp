@@ -17,8 +17,8 @@ from handle_mcp.stores import StoreError
 from handle_mcp.stores._http import per_product
 from handle_mcp.stores.nemlig_recipes import BFF
 
-NO_LABEL = "nemlig viser ingen næringsdeklaration for varen (ofte frisk kød, frugt og grønt)."
-UNKNOWN = "nemlig kender ikke varen."
+NO_LABEL = "nemlig does not provide a nutrition label for this product (often the case for fresh meat, fruit and vegetables)."
+UNKNOWN = "nemlig does not recognize this product."
 
 
 def product_nutrition(product_id: str, data: dict) -> ProductNutrition:
@@ -47,7 +47,7 @@ class NutritionMixin:
     async def nutrition(self, product_ids: list[str]) -> list[ProductNutrition]:
         if bad := [i for i in product_ids if not re.fullmatch(r"\d{1,12}", i)]:
             raise StoreError(
-                f"Ukendt vare-id hos nemlig: {', '.join(bad)}. Brug id'et fra søgningen."
+                f"Unknown product ID at nemlig: {', '.join(bad)}. Use the ID returned by product search."
             )
 
         async def one(pid: str) -> ProductNutrition:
@@ -55,6 +55,6 @@ class NutritionMixin:
             try:
                 return product_nutrition(pid, data)
             except (KeyError, TypeError, AttributeError) as exc:
-                raise StoreError("nemligs næringsindhold har ændret format.") from exc
+                raise StoreError("nemlig nutrition data has changed format.") from exc
 
         return await per_product("nemlig", product_ids, one, UNKNOWN)

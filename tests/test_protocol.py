@@ -66,31 +66,31 @@ async def test_every_tool_answers_json_without_personal_data(tool, args):
 @pytest.mark.parametrize(
     ("tool", "args", "text"),
     [
-        ("get_cart", {"store": "nope"}, "Ukendt butik 'nope'. Kendte butikker: broken, fake."),
+        ("get_cart", {"store": "nope"}, "Unknown store 'nope'. Known stores: broken, fake."),
         (
             "set_cart_quantities",
             {"store": "fake", "items": {"1": 99}},
-            "Antal skal være 0-50. Forkert for: 1.",
+            "Quantity must be between 0 and 50. Invalid for: 1.",
         ),
         (
             "set_cart_quantities",
             {"store": "fake", "items": {"1": "mange"}},
-            "Antal skal være et helt tal",
+            "Quantity must be a whole number",
         ),
         (
             "set_cart_quantities",
             {"store": "fake", "items": {"1": "2_0"}},  # int() reads 20
-            "Antal skal være et helt tal",
+            "Quantity must be a whole number",
         ),
         (
             "set_cart_quantities",
             {"store": "fake", "items": {"1": True}},  # int() reads 1
-            "Antal skal være et helt tal",
+            "Quantity must be a whole number",
         ),
         (
             "add_recipe_to_cart",
             {"store": "fake", "recipe": "r1", "skip": ["Pizza"]},
-            "Opskriften har ikke 'Pizza'. Ingredienser: mælk.",
+            "The recipe does not contain 'Pizza'. Ingredients: mælk.",
         ),
     ],
 )
