@@ -48,7 +48,7 @@ number of items). It includes the application version, operating system and date
 No names, addresses, login credentials, products, order IDs or user/device 
 identifiers are collected.
 Disable this using: HANDLE_TELEMETRY=0 eller: handle-mcp --no-telemetry
-Læs mere: https://github.com/NJohansen/handle-mcp#brugsstatistik
+See more here: https://github.com/NJohansen/handle-mcp#brugsstatistik
 """
 
 _off = False
